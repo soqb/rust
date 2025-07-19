@@ -96,12 +96,16 @@ impl<'tcx> TypeError<'tcx> {
                 if values.found { "variadic" } else { "non-variadic" }
             )
             .into(),
-            TypeError::ProjectionMismatched(ref values) => format!(
-                "expected `{}`, found `{}`",
-                tcx.def_path_str(values.expected),
-                tcx.def_path_str(values.found)
-            )
-            .into(),
+            TypeError::ProjectionMismatched(ref values) => {
+                let expected = values.expected.temp_unwrap_def();
+                let found = values.found.temp_unwrap_def();
+                format!(
+                    "expected `{}`, found `{}`",
+                    tcx.def_path_str(expected),
+                    tcx.def_path_str(found)
+                )
+                .into()
+            }
             TypeError::ExistentialMismatch(ref values) => report_maybe_different(
                 &format!("trait `{}`", values.expected),
                 &format!("trait `{}`", values.found),

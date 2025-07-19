@@ -175,8 +175,8 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for CollectMemberConstraintsVisitor<'_, '_,
             | ty::CoroutineClosure(def_id, args)
             | ty::Coroutine(def_id, args) => self.visit_closure_args(def_id, args),
 
-            ty::Alias(kind, ty::AliasTy { def_id, args, .. })
-                if let Some(variances) = self.cx().opt_alias_variances(kind, def_id) =>
+            ty::Alias(kind, ty::AliasTy { ctor, args, .. })
+                if let Some(variances) = self.cx().opt_alias_variances(kind, ctor.expect_def()) =>
             {
                 // Skip lifetime parameters that are not captured, since they do
                 // not need member constraints registered for them; we'll erase

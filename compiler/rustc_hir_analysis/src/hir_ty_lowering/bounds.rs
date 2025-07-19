@@ -502,7 +502,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 );
                 debug!(?alias_args);
 
-                ty::AliasTerm::new_from_args(tcx, assoc_item.def_id, alias_args)
+                ty::AliasTerm::new_from_args(tcx, assoc_item.def_id.into(), alias_args)
             });
 
             // Provide the resolved type of the associated constant to `type_of(AnonConst)`.
@@ -510,7 +510,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                 && let hir::ConstArgKind::Anon(anon_const) = const_arg.kind
             {
                 let ty = alias_term
-                    .map_bound(|alias| tcx.type_of(alias.def_id).instantiate(tcx, alias.args));
+                    .map_bound(|alias| tcx.type_of_alias(alias.ctor).instantiate(tcx, alias.args));
                 let ty =
                     check_assoc_const_binding_type(self, constraint.ident, ty, constraint.hir_id);
                 tcx.feed_anon_const_type(anon_const.def_id, ty::EarlyBinder::bind(ty));
@@ -792,7 +792,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         // an RPITIT (return-position impl trait in trait) or AFIT (async fn in trait).
         let output = tcx.fn_sig(item_def_id).skip_binder().output();
         let output = if let ty::Alias(ty::Projection, alias_ty) = *output.skip_binder().kind()
-            && tcx.is_impl_trait_in_trait(alias_ty.def_id)
+            && tcx.is_impl_trait_in_trait(alias_ty.ctor)
         {
             alias_ty
         } else {

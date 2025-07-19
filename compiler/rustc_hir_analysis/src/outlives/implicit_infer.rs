@@ -161,16 +161,17 @@ fn insert_required_predicates_to_be_wf<'tcx>(
                 // This corresponds to a type like `Type<'a, T>`.
                 // We check inferred and explicit predicates.
                 debug!("Free");
+                let def_id = alias.ctor.expect_def();
                 check_inferred_predicates(
                     tcx,
-                    alias.def_id,
+                    def_id,
                     alias.args,
                     global_inferred_outlives,
                     required_predicates,
                 );
                 check_explicit_predicates(
                     tcx,
-                    alias.def_id,
+                    def_id,
                     alias.args,
                     required_predicates,
                     explicit_map,
@@ -210,7 +211,7 @@ fn insert_required_predicates_to_be_wf<'tcx>(
                 debug!("Projection");
                 check_explicit_predicates(
                     tcx,
-                    tcx.parent(alias.def_id),
+                    tcx.parent(alias.ctor.expect_def()),
                     alias.args,
                     required_predicates,
                     explicit_map,

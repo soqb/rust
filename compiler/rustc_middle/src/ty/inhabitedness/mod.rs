@@ -115,7 +115,7 @@ impl<'tcx> Ty<'tcx> {
                 InhabitedPredicate::GenericType(self)
             }
             Alias(ty::Opaque, alias_ty) => {
-                match alias_ty.def_id.as_local() {
+                match alias_ty.ctor.expect_def().as_local() {
                     // Foreign opaque is considered inhabited.
                     None => InhabitedPredicate::True,
                     // Local opaque type may possibly be revealed.

@@ -223,7 +223,7 @@ fn iterates_same_ty<'tcx>(cx: &LateContext<'tcx>, iter_ty: Ty<'tcx>, collect_ty:
         && let Some(into_iter_item_proj) = make_projection(cx.tcx, into_iter_trait, sym::Item, [collect_ty])
         && let Ok(into_iter_item_ty) = cx.tcx.try_normalize_erasing_regions(
             cx.typing_env(),
-            Ty::new_projection_from_args(cx.tcx, into_iter_item_proj.def_id, into_iter_item_proj.args),
+            Ty::new_projection_from_args(cx.tcx, into_iter_item_proj.ctor.expect_def(), into_iter_item_proj.args),
         )
     {
         iter_item_ty == into_iter_item_ty

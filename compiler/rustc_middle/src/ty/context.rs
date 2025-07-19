@@ -157,6 +157,8 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
     type PatList = &'tcx List<Pattern<'tcx>>;
     type Safety = hir::Safety;
     type Abi = ExternAbi;
+    type AliasCtor = ty::AliasCtor<'tcx>;
+
     type Const = ty::Const<'tcx>;
     type PlaceholderConst = ty::PlaceholderConst;
 
@@ -231,11 +233,14 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
     fn opt_alias_variances(
         self,
         kind: impl Into<ty::AliasTermKind>,
-        def_id: DefId,
+        ctor: ty::AliasCtor<'tcx>,
     ) -> Option<&'tcx [ty::Variance]> {
-        self.opt_alias_variances(kind, def_id)
+        self.opt_alias_variances(kind, ctor)
     }
 
+    fn type_of_alias(self, ctor: ty::AliasCtor<'tcx>) -> ty::EarlyBinder<'tcx, Ty<'tcx>> {
+        self.type_of_alias(ctor)
+    }
     fn type_of(self, def_id: DefId) -> ty::EarlyBinder<'tcx, Ty<'tcx>> {
         self.type_of(def_id)
     }
@@ -249,10 +254,10 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
     }
 
     fn alias_ty_kind(self, alias: ty::AliasTy<'tcx>) -> ty::AliasTyKind {
-        match self.def_kind(alias.def_id) {
+        let ty::AliasCtor::Def(def_id) = alias.ctor;
+        match self.def_kind(def_id) {
             DefKind::AssocTy => {
-                if let DefKind::Impl { of_trait: false } = self.def_kind(self.parent(alias.def_id))
-                {
+                if let DefKind::Impl { of_trait: false } = self.def_kind(self.parent(def_id)) {
                     ty::Inherent
                 } else {
                     ty::Projection
@@ -265,18 +270,17 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
     }
 
     fn alias_term_kind(self, alias: ty::AliasTerm<'tcx>) -> ty::AliasTermKind {
-        match self.def_kind(alias.def_id) {
+        let ty::AliasCtor::Def(def_id) = alias.ctor;
+        match self.def_kind(def_id) {
             DefKind::AssocTy => {
-                if let DefKind::Impl { of_trait: false } = self.def_kind(self.parent(alias.def_id))
-                {
+                if let DefKind::Impl { of_trait: false } = self.def_kind(self.parent(def_id)) {
                     ty::AliasTermKind::InherentTy
                 } else {
                     ty::AliasTermKind::ProjectionTy
                 }
             }
             DefKind::AssocConst => {
-                if let DefKind::Impl { of_trait: false } = self.def_kind(self.parent(alias.def_id))
-                {
+                if let DefKind::Impl { of_trait: false } = self.def_kind(self.parent(def_id)) {
                     ty::AliasTermKind::InherentConst
                 } else {
                     ty::AliasTermKind::ProjectionConst
@@ -320,8 +324,12 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
         self.check_args_compatible(def_id, args)
     }
 
-    fn debug_assert_args_compatible(self, def_id: DefId, args: ty::GenericArgsRef<'tcx>) {
-        self.debug_assert_args_compatible(def_id, args);
+    fn debug_assert_args_compatible(
+        self,
+        ctor: impl Into<ty::AliasCtor<'tcx>>,
+        args: ty::GenericArgsRef<'tcx>,
+    ) {
+        self.debug_assert_args_compatible(ctor, args);
     }
 
     /// Assert that the args from an `ExistentialTraitRef` or `ExistentialProjection`
@@ -336,7 +344,7 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
         // to avoid needing to reintern the set of args...
         if cfg!(debug_assertions) {
             self.debug_assert_args_compatible(
-                def_id,
+                ty::AliasCtor::Def(def_id),
                 self.mk_args_from_iter(
                     [self.types.trait_object_dummy_self.into()].into_iter().chain(args.iter()),
                 ),
@@ -410,6 +418,30 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
         self.item_non_self_bounds(def_id).map_bound(IntoIterator::into_iter)
     }
 
+    fn alias_bounds(
+        self,
+        ctor: ty::AliasCtor<'tcx>,
+    ) -> ty::EarlyBinder<'tcx, impl IntoIterator<Item = ty::Clause<'tcx>>> {
+        let ty::AliasCtor::Def(def_id) = ctor;
+        self.item_bounds(def_id).map_bound(IntoIterator::into_iter)
+    }
+
+    fn alias_self_bounds(
+        self,
+        ctor: ty::AliasCtor<'tcx>,
+    ) -> ty::EarlyBinder<'tcx, impl IntoIterator<Item = ty::Clause<'tcx>>> {
+        let ty::AliasCtor::Def(def_id) = ctor;
+        self.item_self_bounds(def_id).map_bound(IntoIterator::into_iter)
+    }
+
+    fn alias_non_self_bounds(
+        self,
+        ctor: ty::AliasCtor<'tcx>,
+    ) -> ty::EarlyBinder<'tcx, impl IntoIterator<Item = ty::Clause<'tcx>>> {
+        let ty::AliasCtor::Def(def_id) = ctor;
+        self.item_non_self_bounds(def_id).map_bound(IntoIterator::into_iter)
+    }
+
     fn predicates_of(
         self,
         def_id: DefId,
@@ -462,7 +494,8 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
         self.is_conditionally_const(def_id)
     }
 
-    fn alias_has_const_conditions(self, def_id: DefId) -> bool {
+    fn alias_has_const_conditions(self, ctor: ty::AliasCtor<'tcx>) -> bool {
+        let def_id = ctor.expect_def();
         debug_assert_matches!(self.def_kind(def_id), DefKind::AssocTy | DefKind::OpaqueTy);
         self.is_conditionally_const(def_id)
     }
@@ -2848,16 +2881,24 @@ impl<'tcx> TyCtxt<'tcx> {
 
     /// Given a `ty`, return whether it's an `impl Future<...>`.
     pub fn ty_is_opaque_future(self, ty: Ty<'_>) -> bool {
-        let ty::Alias(ty::Opaque, ty::AliasTy { def_id, .. }) = ty.kind() else { return false };
+        let ty::Alias(ty::Opaque, ty::AliasTy { ctor, .. }) = ty.kind() else { return false };
         let future_trait = self.require_lang_item(LangItem::Future, DUMMY_SP);
 
-        self.explicit_item_self_bounds(def_id).skip_binder().iter().any(|&(predicate, _)| {
-            let ty::ClauseKind::Trait(trait_predicate) = predicate.kind().skip_binder() else {
-                return false;
-            };
-            trait_predicate.trait_ref.def_id == future_trait
-                && trait_predicate.polarity == PredicatePolarity::Positive
-        })
+        self.explicit_item_self_bounds(ctor.expect_def()).skip_binder().iter().any(
+            |&(predicate, _)| {
+                let ty::ClauseKind::Trait(trait_predicate) = predicate.kind().skip_binder() else {
+                    return false;
+                };
+                trait_predicate.trait_ref.def_id == future_trait
+                    && trait_predicate.polarity == PredicatePolarity::Positive
+            },
+        )
+    }
+
+    pub fn type_of_alias(self, ctor: ty::AliasCtor<'tcx>) -> ty::EarlyBinder<'tcx, Ty<'tcx>> {
+        match ctor {
+            ty::AliasCtor::Def(def_id) => self.type_of(def_id),
+        }
     }
 
     /// Given a closure signature, returns an equivalent fn signature. Detuples
@@ -2953,7 +2994,12 @@ impl<'tcx> TyCtxt<'tcx> {
 
     /// With `cfg(debug_assertions)`, assert that args are compatible with their generics,
     /// and print out the args if not.
-    pub fn debug_assert_args_compatible(self, def_id: DefId, args: &'tcx [ty::GenericArg<'tcx>]) {
+    pub fn debug_assert_args_compatible(
+        self,
+        ctor: impl Into<ty::AliasCtor<'tcx>>,
+        args: &'tcx [ty::GenericArg<'tcx>],
+    ) {
+        let ty::AliasCtor::Def(def_id) = ctor.into();
         if cfg!(debug_assertions) && !self.check_args_compatible(def_id, args) {
             if let DefKind::AssocTy = self.def_kind(def_id)
                 && let DefKind::Impl { of_trait: false } = self.def_kind(self.parent(def_id))
@@ -2990,7 +3036,7 @@ impl<'tcx> TyCtxt<'tcx> {
         args: impl IntoIterator<Item: Into<GenericArg<'tcx>>>,
     ) -> GenericArgsRef<'tcx> {
         let args = self.mk_args_from_iter(args.into_iter().map(Into::into));
-        self.debug_assert_args_compatible(def_id, args);
+        self.debug_assert_args_compatible(ty::AliasCtor::Def(def_id), args);
         args
     }
 
@@ -3492,8 +3538,8 @@ impl<'tcx> TyCtxt<'tcx> {
         self.next_trait_solver_globally() || self.sess.opts.unstable_opts.typing_mode_borrowck
     }
 
-    pub fn is_impl_trait_in_trait(self, def_id: DefId) -> bool {
-        self.opt_rpitit_info(def_id).is_some()
+    pub fn is_impl_trait_in_trait(self, ctor: impl Into<ty::AliasCtor<'tcx>>) -> bool {
+        self.opt_rpitit_info(ctor.into()).is_some()
     }
 
     /// Named module children from all kinds of items, including imports.

@@ -331,12 +331,40 @@ impl<'a, 'tcx> Lift<TyCtxt<'tcx>> for Term<'a> {
     }
 }
 
+impl<'a, 'tcx> Lift<TyCtxt<'tcx>> for ty::AliasCtor<'a> {
+    type Lifted = ty::AliasCtor<'tcx>;
+    fn lift_to_interner(self, _tcx: TyCtxt<'tcx>) -> Option<Self::Lifted> {
+        match self {
+            ty::AliasCtor::Def(def_id) => Some(ty::AliasCtor::Def(def_id)),
+        }
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////
 // Traversal implementations.
 
 impl<'tcx> TypeVisitable<TyCtxt<'tcx>> for ty::AdtDef<'tcx> {
     fn visit_with<V: TypeVisitor<TyCtxt<'tcx>>>(&self, _visitor: &mut V) -> V::Result {
         V::Result::output()
+    }
+}
+
+impl<'tcx> TypeVisitable<TyCtxt<'tcx>> for ty::AliasCtor<'tcx> {
+    fn visit_with<V: TypeVisitor<TyCtxt<'tcx>>>(&self, _visitor: &mut V) -> V::Result {
+        V::Result::output()
+    }
+}
+
+impl<'tcx> TypeFoldable<TyCtxt<'tcx>> for ty::AliasCtor<'tcx> {
+    fn try_fold_with<F: FallibleTypeFolder<TyCtxt<'tcx>>>(
+        self,
+        _folder: &mut F,
+    ) -> Result<Self, F::Error> {
+        Ok(self)
+    }
+
+    fn fold_with<F: TypeFolder<TyCtxt<'tcx>>>(self, _folder: &mut F) -> Self {
+        self
     }
 }
 

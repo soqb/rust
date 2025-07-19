@@ -409,17 +409,7 @@ pub struct AliasTy<I: Interner> {
     /// while for TAIT it is used for the generic parameters of the alias.
     pub args: I::GenericArgs,
 
-    /// The `DefId` of the `TraitItem` or `ImplItem` for the associated type `N` depending on whether
-    /// this is a projection or an inherent projection or the `DefId` of the `OpaqueType` item if
-    /// this is an opaque.
-    ///
-    /// During codegen, `interner.type_of(def_id)` can be used to get the type of the
-    /// underlying type if the type is an opaque.
-    ///
-    /// Note that if this is an associated type, this is not the `DefId` of the
-    /// `TraitRef` containing this associated type, which is in `interner.associated_item(def_id).container`,
-    /// aka. `interner.parent(def_id)`.
-    pub def_id: I::DefId,
+    pub ctor: I::AliasCtor,
 
     /// This field exists to prevent the creation of `AliasTy` without using [`AliasTy::new_from_args`].
     #[derive_where(skip(Debug))]
@@ -429,18 +419,18 @@ pub struct AliasTy<I: Interner> {
 impl<I: Interner> Eq for AliasTy<I> {}
 
 impl<I: Interner> AliasTy<I> {
-    pub fn new_from_args(interner: I, def_id: I::DefId, args: I::GenericArgs) -> AliasTy<I> {
-        interner.debug_assert_args_compatible(def_id, args);
-        AliasTy { def_id, args, _use_alias_ty_new_instead: () }
+    pub fn new_from_args(interner: I, ctor: I::AliasCtor, args: I::GenericArgs) -> AliasTy<I> {
+        interner.debug_assert_args_compatible(ctor, args);
+        AliasTy { ctor, args, _use_alias_ty_new_instead: () }
     }
 
     pub fn new(
         interner: I,
-        def_id: I::DefId,
+        ctor: I::AliasCtor,
         args: impl IntoIterator<Item: Into<I::GenericArg>>,
     ) -> AliasTy<I> {
         let args = interner.mk_args_from_iter(args.into_iter().map(Into::into));
-        Self::new_from_args(interner, def_id, args)
+        Self::new_from_args(interner, ctor, args)
     }
 
     pub fn kind(self, interner: I) -> AliasTyKind {
@@ -466,14 +456,14 @@ impl<I: Interner> AliasTy<I> {
     pub fn with_replaced_self_ty(self, interner: I, self_ty: I::Ty) -> Self {
         AliasTy::new(
             interner,
-            self.def_id,
+            self.ctor,
             [self_ty.into()].into_iter().chain(self.args.iter().skip(1)),
         )
     }
 
     pub fn trait_def_id(self, interner: I) -> I::DefId {
         assert_eq!(self.kind(interner), AliasTyKind::Projection, "expected a projection");
-        interner.parent(self.def_id)
+        interner.parent(self.ctor.expect_def())
     }
 
     /// Extracts the underlying trait reference and own args from this projection.
@@ -482,7 +472,7 @@ impl<I: Interner> AliasTy<I> {
     /// `['a]` as the own args.
     pub fn trait_ref_and_own_args(self, interner: I) -> (ty::TraitRef<I>, I::GenericArgsSlice) {
         debug_assert_eq!(self.kind(interner), AliasTyKind::Projection);
-        interner.trait_ref_and_own_args_for_alias(self.def_id, self.args)
+        interner.trait_ref_and_own_args_for_alias(self.ctor.expect_def(), self.args)
     }
 
     /// Extracts the underlying trait reference from this projection.

@@ -518,8 +518,9 @@ impl<'tcx> Ty<'tcx> {
         kind: ty::AliasTyKind,
         alias_ty: ty::AliasTy<'tcx>,
     ) -> Ty<'tcx> {
+        let ty::AliasCtor::Def(def_id) = alias_ty.ctor;
         debug_assert_matches!(
-            (kind, tcx.def_kind(alias_ty.def_id)),
+            (kind, tcx.def_kind(def_id)),
             (ty::Opaque, DefKind::OpaqueTy)
                 | (ty::Projection | ty::Inherent, DefKind::AssocTy)
                 | (ty::Free, DefKind::TyAlias)
@@ -535,7 +536,11 @@ impl<'tcx> Ty<'tcx> {
     #[inline]
     #[instrument(level = "debug", skip(tcx))]
     pub fn new_opaque(tcx: TyCtxt<'tcx>, def_id: DefId, args: GenericArgsRef<'tcx>) -> Ty<'tcx> {
-        Ty::new_alias(tcx, ty::Opaque, AliasTy::new_from_args(tcx, def_id, args))
+        Ty::new_alias(
+            tcx,
+            ty::Opaque,
+            AliasTy::new_from_args(tcx, ty::AliasCtor::Def(def_id), args),
+        )
     }
 
     /// Constructs a `TyKind::Error` type with current `ErrorGuaranteed`
@@ -792,7 +797,7 @@ impl<'tcx> Ty<'tcx> {
         item_def_id: DefId,
         args: ty::GenericArgsRef<'tcx>,
     ) -> Ty<'tcx> {
-        Ty::new_alias(tcx, ty::Projection, AliasTy::new_from_args(tcx, item_def_id, args))
+        Ty::new_alias(tcx, ty::Projection, AliasTy::new_from_args(tcx, item_def_id.into(), args))
     }
 
     #[inline]
@@ -801,7 +806,7 @@ impl<'tcx> Ty<'tcx> {
         item_def_id: DefId,
         args: impl IntoIterator<Item: Into<GenericArg<'tcx>>>,
     ) -> Ty<'tcx> {
-        Ty::new_alias(tcx, ty::Projection, AliasTy::new(tcx, item_def_id, args))
+        Ty::new_alias(tcx, ty::Projection, AliasTy::new(tcx, item_def_id.into(), args))
     }
 
     #[inline]

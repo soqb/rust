@@ -1414,9 +1414,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         }
                     }
                 }
-                ty::Alias(ty::Opaque, ty::AliasTy { def_id: new_def_id, .. })
-                | ty::Closure(new_def_id, _)
-                | ty::FnDef(new_def_id, _) => {
+                ty::Alias(ty::Opaque, ty::AliasTy { ctor, .. }) => {
+                    def_id = ctor.expect_def();
+                }
+                ty::Closure(new_def_id, _) | ty::FnDef(new_def_id, _) => {
                     def_id = new_def_id;
                 }
                 _ => {

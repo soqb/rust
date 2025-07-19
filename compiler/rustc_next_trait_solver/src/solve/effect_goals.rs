@@ -84,13 +84,14 @@ where
         let cx = ecx.cx();
         let mut candidates = vec![];
 
-        if !ecx.cx().alias_has_const_conditions(alias_ty.def_id) {
+        if !ecx.cx().alias_has_const_conditions(alias_ty.ctor) {
             return vec![];
         }
 
+        let def_id = alias_ty.ctor.temp_unwrap_def();
         for clause in elaborate::elaborate(
             cx,
-            cx.explicit_implied_const_bounds(alias_ty.def_id)
+            cx.explicit_implied_const_bounds(def_id)
                 .iter_instantiated(cx, alias_ty.args)
                 .map(|trait_ref| trait_ref.to_host_effect_clause(cx, goal.predicate.constness)),
         ) {
@@ -103,14 +104,14 @@ where
                     // Const conditions must hold for the implied const bound to hold.
                     ecx.add_goals(
                         GoalSource::AliasBoundConstCondition,
-                        cx.const_conditions(alias_ty.def_id)
-                            .iter_instantiated(cx, alias_ty.args)
-                            .map(|trait_ref| {
+                        cx.const_conditions(def_id).iter_instantiated(cx, alias_ty.args).map(
+                            |trait_ref| {
                                 goal.with(
                                     cx,
                                     trait_ref.to_host_effect_clause(cx, goal.predicate.constness),
                                 )
-                            }),
+                            },
+                        ),
                     );
                     ecx.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
                 },

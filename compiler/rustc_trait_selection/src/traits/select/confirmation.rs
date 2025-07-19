@@ -196,7 +196,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
 
         // FIXME(compiler-errors): I don't think this is needed.
         if let ty::Alias(ty::Projection, alias_ty) = placeholder_self_ty.kind() {
-            let predicates = tcx.predicates_of(alias_ty.def_id).instantiate_own(tcx, alias_ty.args);
+            let predicates = alias_ty.ctor.predicates(tcx).instantiate_own(tcx, alias_ty.args);
             for (predicate, _) in predicates {
                 let normalized = normalize_with_depth_to(
                     self,

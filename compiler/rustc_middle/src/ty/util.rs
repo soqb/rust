@@ -769,6 +769,11 @@ impl<'tcx> TyCtxt<'tcx> {
         self.def_kind_descr(self.def_kind(def_id), def_id)
     }
 
+    pub fn alias_descr(self, ctor: ty::AliasCtor<'tcx>) -> &'static str {
+        let def_id = ctor.temp_unwrap_def();
+        self.def_descr(def_id)
+    }
+
     /// Get an English description for the item's kind.
     pub fn def_kind_descr(self, def_kind: DefKind, def_id: DefId) -> &'static str {
         match def_kind {
@@ -915,7 +920,7 @@ impl<'tcx> TyCtxt<'tcx> {
                 return Ty::new_error(self, guar);
             }
 
-            ty = self.type_of(alias.def_id).instantiate(self, alias.args);
+            ty = self.type_of(alias.ctor.expect_def()).instantiate(self, alias.args);
             depth += 1;
         }
 
@@ -927,17 +932,18 @@ impl<'tcx> TyCtxt<'tcx> {
     pub fn opt_alias_variances(
         self,
         kind: impl Into<ty::AliasTermKind>,
-        def_id: DefId,
+        ctor: ty::AliasCtor<'tcx>,
     ) -> Option<&'tcx [ty::Variance]> {
         match kind.into() {
             ty::AliasTermKind::ProjectionTy => {
+                let def_id = ctor.expect_def();
                 if self.is_impl_trait_in_trait(def_id) {
                     Some(self.variances_of(def_id))
                 } else {
                     None
                 }
             }
-            ty::AliasTermKind::OpaqueTy => Some(self.variances_of(def_id)),
+            ty::AliasTermKind::OpaqueTy => Some(self.variances_of(ctor.expect_def())),
             ty::AliasTermKind::InherentTy
             | ty::AliasTermKind::InherentConst
             | ty::AliasTermKind::FreeTy
@@ -1004,8 +1010,8 @@ impl<'tcx> TypeFolder<TyCtxt<'tcx>> for OpaqueTypeExpander<'tcx> {
     }
 
     fn fold_ty(&mut self, t: Ty<'tcx>) -> Ty<'tcx> {
-        if let ty::Alias(ty::Opaque, ty::AliasTy { def_id, args, .. }) = *t.kind() {
-            self.expand_opaque_ty(def_id, args).unwrap_or(t)
+        if let ty::Alias(ty::Opaque, ty::AliasTy { ctor, args, .. }) = *t.kind() {
+            self.expand_opaque_ty(ctor.expect_def(), args).unwrap_or(t)
         } else if t.has_opaque_types() {
             t.super_fold_with(self)
         } else {
@@ -1058,7 +1064,7 @@ impl<'tcx> TypeFolder<TyCtxt<'tcx>> for FreeAliasTypeExpander<'tcx> {
 
         self.depth += 1;
         let ty = ensure_sufficient_stack(|| {
-            self.tcx.type_of(alias.def_id).instantiate(self.tcx, alias.args).fold_with(self)
+            self.tcx.type_of_alias(alias.ctor).instantiate(self.tcx, alias.args).fold_with(self)
         });
         self.depth -= 1;
         ty

@@ -503,7 +503,7 @@ fn projection_to_path_segment<'tcx>(
     proj: ty::Binder<'tcx, ty::AliasTerm<'tcx>>,
     cx: &mut DocContext<'tcx>,
 ) -> PathSegment {
-    let def_id = proj.skip_binder().def_id;
+    let def_id = proj.skip_binder().ctor.expect_def();
     let generics = cx.tcx.generics_of(def_id);
     PathSegment {
         name: cx.tcx.item_name(def_id),
@@ -2156,9 +2156,9 @@ pub(crate) fn clean_middle_ty<'tcx>(
             Tuple(t.iter().map(|t| clean_middle_ty(bound_ty.rebind(t), cx, None, None)).collect())
         }
 
-        ty::Alias(ty::Projection, alias_ty @ ty::AliasTy { def_id, args, .. }) => {
-            if cx.tcx.is_impl_trait_in_trait(def_id) {
-                clean_middle_opaque_bounds(cx, def_id, args)
+        ty::Alias(ty::Projection, alias_ty @ ty::AliasTy { ctor, args, .. }) => {
+            if cx.tcx.is_impl_trait_in_trait(ctor) {
+                clean_middle_opaque_bounds(cx, ctor, args)
             } else {
                 Type::QPath(Box::new(clean_projection(
                     bound_ty.rebind(alias_ty.into()),
@@ -2168,7 +2168,8 @@ pub(crate) fn clean_middle_ty<'tcx>(
             }
         }
 
-        ty::Alias(ty::Inherent, alias_ty @ ty::AliasTy { def_id, .. }) => {
+        ty::Alias(ty::Inherent, alias_ty @ ty::AliasTy { ctor, .. }) => {
+            let def_id = ctor.expect_def();
             let alias_ty = bound_ty.rebind(alias_ty);
             let self_type = clean_middle_ty(alias_ty.map_bound(|ty| ty.self_ty()), cx, None, None);
 
@@ -2191,7 +2192,8 @@ pub(crate) fn clean_middle_ty<'tcx>(
             }))
         }
 
-        ty::Alias(ty::Free, ty::AliasTy { def_id, args, .. }) => {
+        ty::Alias(ty::Free, ty::AliasTy { ctor, args, .. }) => {
+            let def_id = ctor.expect_def();
             if cx.tcx.features().lazy_type_alias() {
                 // Free type alias `data` represents the `type X` in `type X = Y`. If we need `Y`,
                 // we need to use `type_of`.
@@ -2219,8 +2221,9 @@ pub(crate) fn clean_middle_ty<'tcx>(
             ty::BoundTyKind::Anon => panic!("unexpected anonymous bound type variable"),
         },
 
-        ty::Alias(ty::Opaque, ty::AliasTy { def_id, args, .. }) => {
+        ty::Alias(ty::Opaque, ty::AliasTy { ctor, args, .. }) => {
             // If it's already in the same alias, don't get an infinite loop.
+            let def_id = ctor.expect_def();
             if cx.current_type_aliases.contains_key(&def_id) {
                 let path =
                     clean_middle_path(cx, def_id, false, ThinVec::new(), bound_ty.rebind(args));
@@ -2229,7 +2232,7 @@ pub(crate) fn clean_middle_ty<'tcx>(
                 *cx.current_type_aliases.entry(def_id).or_insert(0) += 1;
                 // Grab the "TraitA + TraitB" from `impl TraitA + TraitB`,
                 // by looking up the bounds associated with the def_id.
-                let ty = clean_middle_opaque_bounds(cx, def_id, args);
+                let ty = clean_middle_opaque_bounds(cx, ctor, args);
                 if let Some(count) = cx.current_type_aliases.get_mut(&def_id) {
                     *count -= 1;
                     if *count == 0 {
@@ -2253,16 +2256,13 @@ pub(crate) fn clean_middle_ty<'tcx>(
 
 fn clean_middle_opaque_bounds<'tcx>(
     cx: &mut DocContext<'tcx>,
-    impl_trait_def_id: DefId,
+    impl_trait_ctor: ty::AliasCtor<'tcx>,
     args: ty::GenericArgsRef<'tcx>,
 ) -> Type {
     let mut has_sized = false;
 
-    let bounds: Vec<_> = cx
-        .tcx
-        .explicit_item_bounds(impl_trait_def_id)
-        .iter_instantiated_copied(cx.tcx, args)
-        .collect();
+    let bounds: Vec<_> =
+        impl_trait_ctor.explicit_bounds(cx.tcx).iter_instantiated_copied(cx.tcx, args).collect();
 
     let mut bounds = bounds
         .iter()
@@ -2327,7 +2327,7 @@ fn clean_middle_opaque_bounds<'tcx>(
         bounds.insert(0, GenericBound::sized(cx));
     }
 
-    if let Some(args) = cx.tcx.rendered_precise_capturing_args(impl_trait_def_id) {
+    if let Some(args) = cx.tcx.rendered_precise_capturing_args(impl_trait_ctor.expect_def()) {
         bounds.push(GenericBound::Use(
             args.iter()
                 .map(|arg| match arg {

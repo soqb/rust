@@ -53,10 +53,12 @@ impl<'tcx> Printer<'tcx> for TypeNamePrinter<'tcx> {
             // Types with identity (print the module path).
             ty::Adt(ty::AdtDef(Interned(&ty::AdtDefData { did: def_id, .. }, _)), args)
             | ty::FnDef(def_id, args)
-            | ty::Alias(ty::Projection | ty::Opaque, ty::AliasTy { def_id, args, .. })
             | ty::Closure(def_id, args)
             | ty::CoroutineClosure(def_id, args)
             | ty::Coroutine(def_id, args) => self.print_def_path(def_id, args),
+            ty::Alias(ty::Projection | ty::Opaque, ty::AliasTy { ctor, args, .. }) => {
+                self.print_def_path(ctor.expect_def(), args)
+            }
             ty::Foreign(def_id) => self.print_def_path(def_id, &[]),
 
             ty::Alias(ty::Free, _) => bug!("type_name: unexpected free alias"),

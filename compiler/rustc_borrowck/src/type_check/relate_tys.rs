@@ -348,9 +348,9 @@ impl<'b, 'tcx> TypeRelation<TyCtxt<'tcx>> for NllTypeRelating<'_, 'b, 'tcx> {
             }
 
             (
-                &ty::Alias(ty::Opaque, ty::AliasTy { def_id: a_def_id, .. }),
-                &ty::Alias(ty::Opaque, ty::AliasTy { def_id: b_def_id, .. }),
-            ) if a_def_id == b_def_id || infcx.next_trait_solver() => {
+                &ty::Alias(ty::Opaque, ty::AliasTy { ctor: a_ctor, .. }),
+                &ty::Alias(ty::Opaque, ty::AliasTy { ctor: b_ctor, .. }),
+            ) if a_ctor == b_ctor || infcx.next_trait_solver() => {
                 super_combine_tys(&infcx.infcx, self, a, b).map(|_| ()).or_else(|err| {
                     // This behavior is only there for the old solver, the new solver
                     // shouldn't ever fail. Instead, it unconditionally emits an
@@ -360,12 +360,12 @@ impl<'b, 'tcx> TypeRelation<TyCtxt<'tcx>> for NllTypeRelating<'_, 'b, 'tcx> {
                         self.span(),
                         "failure to relate an opaque to itself should result in an error later on",
                     );
-                    if a_def_id.is_local() { self.relate_opaques(a, b) } else { Err(err) }
+                    if a_ctor.is_local_def() { self.relate_opaques(a, b) } else { Err(err) }
                 })?;
             }
-            (&ty::Alias(ty::Opaque, ty::AliasTy { def_id, .. }), _)
-            | (_, &ty::Alias(ty::Opaque, ty::AliasTy { def_id, .. }))
-                if def_id.is_local() && !self.type_checker.infcx.next_trait_solver() =>
+            (&ty::Alias(ty::Opaque, ty::AliasTy { ctor, .. }), _)
+            | (_, &ty::Alias(ty::Opaque, ty::AliasTy { ctor, .. }))
+                if ctor.is_local_def() && !self.type_checker.infcx.next_trait_solver() =>
             {
                 self.relate_opaques(a, b)?;
             }

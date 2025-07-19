@@ -224,12 +224,13 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for ImplTraitInTraitFinder<'_, 'tcx> {
 
     fn visit_ty(&mut self, ty: Ty<'tcx>) {
         if let ty::Alias(ty::Projection, unshifted_alias_ty) = *ty.kind()
+            && let unshifted_alias_def_id = unshifted_alias_ty.ctor.expect_def()
             && let Some(
                 ty::ImplTraitInTraitData::Trait { fn_def_id, .. }
                 | ty::ImplTraitInTraitData::Impl { fn_def_id, .. },
-            ) = self.tcx.opt_rpitit_info(unshifted_alias_ty.def_id)
+            ) = self.tcx.opt_rpitit_info(unshifted_alias_def_id)
             && fn_def_id == self.fn_def_id
-            && self.seen.insert(unshifted_alias_ty.def_id)
+            && self.seen.insert(unshifted_alias_def_id)
         {
             // We have entered some binders as we've walked into the
             // bounds of the RPITIT. Shift these binders back out when
@@ -248,13 +249,12 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for ImplTraitInTraitFinder<'_, 'tcx> {
                     re
                 }
             });
-
             // If we're lowering to associated item, install the opaque type which is just
             // the `type_of` of the trait's associated item. If we're using the old lowering
             // strategy, then just reinterpret the associated type like an opaque :^)
             let default_ty = self
                 .tcx
-                .type_of(shifted_alias_ty.def_id)
+                .type_of_alias(shifted_alias_ty.ctor)
                 .instantiate(self.tcx, shifted_alias_ty.args);
 
             self.predicates.push(
@@ -272,9 +272,9 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for ImplTraitInTraitFinder<'_, 'tcx> {
             // binder depth, and if we were to walk `shifted_alias_ty` instead, we'd
             // have to reset `self.depth` back to `ty::INNERMOST` or something. It's
             // easier to just do this.
-            for bound in self
-                .tcx
-                .item_bounds(unshifted_alias_ty.def_id)
+            for bound in unshifted_alias_ty
+                .ctor
+                .bounds(self.tcx)
                 .iter_instantiated(self.tcx, unshifted_alias_ty.args)
             {
                 bound.visit_with(self);

@@ -444,6 +444,143 @@ impl<'tcx> rustc_type_ir::Flags for Ty<'tcx> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, HashStable, TyEncodable, TyDecodable)]
+pub enum AliasCtor<'tcx> {
+    /// The `DefId` of the `TraitItem` or `ImplItem` for the associated type `N` depending on whether
+    /// this is a projection or an inherent projection or the `DefId` of the `OpaqueType` item if
+    /// this is an opaque.
+    ///
+    /// During codegen, `interner.type_of(def_id)` can be used to get the type of the
+    /// underlying type if the type is an opaque.
+    ///
+    /// Note that if this is an associated type, this is not the `DefId` of the
+    /// `TraitRef` containing this associated type, which is in `interner.associated_item(def_id).container`,
+    /// aka. `interner.parent(def_id)`.
+    Def(DefId),
+    _No(!, PhantomData<&'tcx ()>),
+}
+
+impl<'tcx> AliasCtor<'tcx> {
+    pub fn expect_def(self) -> DefId {
+        let AliasCtor::Def(def_id) = self;
+        def_id
+    }
+
+    pub fn def(self) -> Option<DefId> {
+        let AliasCtor::Def(def_id) = self;
+        Some(def_id)
+    }
+
+    pub fn is_local_def(self) -> bool {
+        matches!(self, AliasCtor::Def(_))
+    }
+
+    pub fn temp_unwrap_def(self) -> DefId {
+        let AliasCtor::Def(def_id) = self;
+        def_id
+    }
+
+    pub fn span(self, cx: TyCtxt<'tcx>) -> Span {
+        match self {
+            AliasCtor::Def(def_id) => cx.def_span(def_id),
+        }
+    }
+
+    pub fn bounds(self, cx: TyCtxt<'tcx>) -> ty::EarlyBinder<'tcx, ty::Clauses<'tcx>> {
+        match self {
+            AliasCtor::Def(def_id) => cx.item_bounds(def_id),
+        }
+    }
+
+    pub fn self_bounds(self, cx: TyCtxt<'tcx>) -> ty::EarlyBinder<'tcx, ty::Clauses<'tcx>> {
+        match self {
+            AliasCtor::Def(def_id) => cx.item_self_bounds(def_id),
+        }
+    }
+
+    pub fn non_self_bounds(self, cx: TyCtxt<'tcx>) -> ty::EarlyBinder<'tcx, ty::Clauses<'tcx>> {
+        match self {
+            AliasCtor::Def(def_id) => cx.item_non_self_bounds(def_id),
+        }
+    }
+
+    pub fn predicates(self, cx: TyCtxt<'tcx>) -> ty::GenericPredicates<'tcx> {
+        match self {
+            AliasCtor::Def(def_id) => cx.predicates_of(def_id),
+        }
+    }
+
+    pub fn explicit_bounds(
+        self,
+        cx: TyCtxt<'tcx>,
+    ) -> ty::EarlyBinder<'tcx, &'tcx [(ty::Clause<'tcx>, Span)]> {
+        match self {
+            AliasCtor::Def(def_id) => cx.explicit_item_bounds(def_id),
+        }
+    }
+
+    pub fn explicit_self_bounds(
+        self,
+        cx: TyCtxt<'tcx>,
+    ) -> ty::EarlyBinder<'tcx, &'tcx [(ty::Clause<'tcx>, Span)]> {
+        match self {
+            AliasCtor::Def(def_id) => cx.explicit_item_self_bounds(def_id),
+        }
+    }
+
+    pub fn variances(self, cx: TyCtxt<'tcx>) -> &'tcx [ty::Variance] {
+        match self {
+            AliasCtor::Def(def_id) => cx.variances_of(def_id),
+        }
+    }
+
+    pub fn generics(self, cx: TyCtxt<'tcx>) -> &'tcx ty::Generics {
+        match self {
+            AliasCtor::Def(def_id) => cx.generics_of(def_id),
+        }
+    }
+}
+
+impl<'tcx> rustc_type_ir::inherent::AliasCtor<TyCtxt<'tcx>> for AliasCtor<'tcx> {
+    fn expect_def(self) -> DefId {
+        self.expect_def()
+    }
+
+    fn temp_unwrap_def(self) -> DefId {
+        self.temp_unwrap_def()
+    }
+
+    fn span(self, cx: TyCtxt<'tcx>) -> Span {
+        self.span(cx)
+    }
+
+    fn bounds(self, cx: TyCtxt<'tcx>) -> ty::EarlyBinder<'tcx, ty::Clauses<'tcx>> {
+        self.bounds(cx)
+    }
+
+    fn self_bounds(self, cx: TyCtxt<'tcx>) -> ty::EarlyBinder<'tcx, ty::Clauses<'tcx>> {
+        self.self_bounds(cx)
+    }
+
+    fn non_self_bounds(self, cx: TyCtxt<'tcx>) -> ty::EarlyBinder<'tcx, ty::Clauses<'tcx>> {
+        self.non_self_bounds(cx)
+    }
+}
+
+impl<'tcx> From<DefId> for AliasCtor<'tcx> {
+    fn from(def_id: DefId) -> AliasCtor<'tcx> {
+        AliasCtor::Def(def_id)
+    }
+}
+
+impl EarlyParamRegion {
+    /// Does this early bound region have a name? Early bound regions normally
+    /// always have names except when using anonymous lifetimes (`'_`).
+    pub fn is_named(&self) -> bool {
+        self.name != kw::UnderscoreLifetime
+    }
+}
+
 /// The crate outlives map is computed during typeck and contains the
 /// outlives of every item in the local crate. You should not use it
 /// directly, because to do so will make your pass dependent on the
@@ -1589,7 +1726,11 @@ impl<'tcx> TyCtxt<'tcx> {
     /// If the `def_id` is an associated type that was desugared from a
     /// return-position `impl Trait` from a trait, then provide the source info
     /// about where that RPITIT came from.
-    pub fn opt_rpitit_info(self, def_id: DefId) -> Option<ImplTraitInTraitData> {
+    pub fn opt_rpitit_info(
+        self,
+        ctor: impl Into<ty::AliasCtor<'tcx>>,
+    ) -> Option<ImplTraitInTraitData> {
+        let def_id = ctor.into().temp_unwrap_def();
         if let DefKind::AssocTy = self.def_kind(def_id)
             && let AssocKind::Type { data: AssocTypeData::Rpitit(rpitit_info) } =
                 self.associated_item(def_id).kind

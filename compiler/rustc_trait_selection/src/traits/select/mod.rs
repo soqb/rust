@@ -1638,15 +1638,16 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 }
                 _ => return ControlFlow::Continue(()),
             };
+            let def_id = alias_ty.ctor.expect_def();
 
             // HACK: On subsequent recursions, we only care about bounds that don't
             // share the same type as `self_ty`. This is because for truly rigid
             // projections, we will never be able to equate, e.g. `<T as Tr>::A`
             // with `<<T as Tr>::A as Tr>::A`.
             let relevant_bounds = if in_parent_alias_type {
-                self.tcx().item_non_self_bounds(alias_ty.def_id)
+                self.tcx().item_non_self_bounds(def_id)
             } else {
-                self.tcx().item_self_bounds(alias_ty.def_id)
+                self.tcx().item_self_bounds(def_id)
             };
 
             for bound in relevant_bounds.instantiate(self.tcx(), alias_ty.args) {
@@ -1739,7 +1740,8 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         env_predicate: PolyProjectionPredicate<'tcx>,
         potentially_unnormalized_candidates: bool,
     ) -> ProjectionMatchesProjection {
-        debug_assert_eq!(obligation.predicate.def_id, env_predicate.item_def_id());
+        let def_id = obligation.predicate.ctor.expect_def();
+        debug_assert_eq!(def_id, env_predicate.item_def_id());
 
         let mut nested_obligations = PredicateObligations::new();
         let infer_predicate = self.infcx.instantiate_binder_with_fresh_vars(
@@ -1775,7 +1777,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             });
 
         if is_match {
-            let generics = self.tcx().generics_of(obligation.predicate.def_id);
+            let generics = self.tcx().generics_of(def_id);
             // FIXME(generic_associated_types): Addresses aggressive inference in #92917.
             // If this type is a GAT, and of the GAT args resolve to something new,
             // that means that we must have newly inferred something about the GAT.
@@ -2355,7 +2357,8 @@ impl<'tcx> SelectionContext<'_, 'tcx> {
                 assumptions: vec![],
             }),
 
-            ty::Alias(ty::Opaque, ty::AliasTy { def_id, args, .. }) => {
+            ty::Alias(ty::Opaque, ty::AliasTy { ctor, args, .. }) => {
+                let def_id = ctor.expect_def();
                 if self.infcx.can_define_opaque_ty(def_id) {
                     unreachable!()
                 } else {

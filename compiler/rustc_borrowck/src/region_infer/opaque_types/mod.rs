@@ -326,7 +326,7 @@ fn compute_definition_site_hidden_types_from_defining_uses<'tcx>(
         // writeback.
         if !rcx.infcx.tcx.use_typing_mode_borrowck() {
             if let ty::Alias(ty::Opaque, alias_ty) = ty.kind()
-                && alias_ty.def_id == opaque_type_key.def_id.to_def_id()
+                && alias_ty.ctor.expect_def() == opaque_type_key.def_id.to_def_id()
                 && alias_ty.args == opaque_type_key.args
             {
                 continue;
@@ -504,7 +504,7 @@ pub(crate) fn apply_definition_site_hidden_types<'tcx>(
         let Some(expected) = get_hidden_type(hidden_types, key.def_id) else {
             if !tcx.use_typing_mode_borrowck() {
                 if let ty::Alias(ty::Opaque, alias_ty) = hidden_type.ty.kind()
-                    && alias_ty.def_id == key.def_id.to_def_id()
+                    && alias_ty.ctor.expect_def() == key.def_id.to_def_id()
                     && alias_ty.args == key.args
                 {
                     continue;

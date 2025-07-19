@@ -767,20 +767,20 @@ impl<'tcx> TypeErrCtxt<'_, 'tcx> {
                 StatementAsExpression::CorrectType
             }
             (
-                ty::Alias(ty::Opaque, ty::AliasTy { def_id: last_def_id, .. }),
-                ty::Alias(ty::Opaque, ty::AliasTy { def_id: exp_def_id, .. }),
-            ) if last_def_id == exp_def_id => StatementAsExpression::CorrectType,
+                ty::Alias(ty::Opaque, ty::AliasTy { ctor: last_ctor, .. }),
+                ty::Alias(ty::Opaque, ty::AliasTy { ctor: exp_ctor, .. }),
+            ) if last_ctor == exp_ctor => StatementAsExpression::CorrectType,
             (
-                ty::Alias(ty::Opaque, ty::AliasTy { def_id: last_def_id, args: last_bounds, .. }),
-                ty::Alias(ty::Opaque, ty::AliasTy { def_id: exp_def_id, args: exp_bounds, .. }),
+                ty::Alias(ty::Opaque, ty::AliasTy { ctor: last_ctor, args: last_bounds, .. }),
+                ty::Alias(ty::Opaque, ty::AliasTy { ctor: exp_ctor, args: exp_bounds, .. }),
             ) => {
                 debug!(
                     "both opaque, likely future {:?} {:?} {:?} {:?}",
-                    last_def_id, last_bounds, exp_def_id, exp_bounds
+                    last_ctor, last_bounds, exp_ctor, exp_bounds
                 );
 
-                let last_local_id = last_def_id.as_local()?;
-                let exp_local_id = exp_def_id.as_local()?;
+                let last_local_id = last_ctor.expect_def().as_local()?;
+                let exp_local_id = exp_ctor.expect_def().as_local()?;
 
                 match (
                     &self.tcx.hir_expect_opaque_ty(last_local_id),

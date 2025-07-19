@@ -318,7 +318,8 @@ enum LenOutput {
 
 fn extract_future_output<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> Option<&'tcx PathSegment<'tcx>> {
     if let ty::Alias(_, alias_ty) = ty.kind()
-        && let Some(Node::OpaqueTy(opaque)) = cx.tcx.hir_get_if_local(alias_ty.def_id)
+        && let Some(def_id) = alias_ty.ctor.def()
+        && let Some(Node::OpaqueTy(opaque)) = cx.tcx.hir_get_if_local(def_id)
         && let OpaqueTyOrigin::AsyncFn { .. } = opaque.origin
         && let [GenericBound::Trait(trait_ref)] = &opaque.bounds
         && let Some(segment) = trait_ref.trait_ref.path.segments.last()
@@ -631,7 +632,7 @@ fn has_is_empty(cx: &LateContext<'_>, expr: &Expr<'_>) -> bool {
                     .filter_by_name_unhygienic(sym::is_empty)
                     .any(|item| is_is_empty(cx, item))
             }),
-            ty::Alias(ty::Projection, proj) => has_is_empty_impl(cx, proj.def_id),
+            ty::Alias(ty::Projection, proj) => has_is_empty_impl(cx, proj.ctor.expect_def()),
             ty::Adt(id, _) => {
                 has_is_empty_impl(cx, id.did())
                     || (cx.tcx.recursion_limit().value_within_limit(depth)

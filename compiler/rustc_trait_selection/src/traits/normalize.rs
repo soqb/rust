@@ -313,8 +313,9 @@ impl<'a, 'b, 'tcx> AssocTypeNormalizer<'a, 'b, 'tcx> {
         // the compiler so ideally we'd do the same boundvar->placeholder->boundvar dance
         // that other kinds of normalization do.
         let infcx = self.selcx.infcx;
+        let def_id = free.ctor.expect_def();
         self.obligations.extend(
-            infcx.tcx.predicates_of(free.def_id).instantiate_own(infcx.tcx, free.args).map(
+            infcx.tcx.predicates_of(def_id).instantiate_own(infcx.tcx, free.args).map(
                 |(mut predicate, span)| {
                     if free.has_escaping_bound_vars() {
                         (predicate, ..) = BoundVarReplacer::replace_bound_vars(
@@ -324,14 +325,14 @@ impl<'a, 'b, 'tcx> AssocTypeNormalizer<'a, 'b, 'tcx> {
                         );
                     }
                     let mut cause = self.cause.clone();
-                    cause.map_code(|code| ObligationCauseCode::TypeAlias(code, span, free.def_id));
+                    cause.map_code(|code| ObligationCauseCode::TypeAlias(code, span, def_id));
                     Obligation::new(infcx.tcx, cause, self.param_env, predicate)
                 },
             ),
         );
         self.depth += 1;
         let res = if free.kind(infcx.tcx).is_type() {
-            infcx.tcx.type_of(free.def_id).instantiate(infcx.tcx, free.args).fold_with(self).into()
+            infcx.tcx.type_of(def_id).instantiate(infcx.tcx, free.args).fold_with(self).into()
         } else {
             // FIXME(mgca): once const items are actual aliases defined as equal to type system consts
             // this should instead use that rather than evaluating.
@@ -413,7 +414,7 @@ impl<'a, 'b, 'tcx> TypeFolder<TyCtxt<'tcx>> for AssocTypeNormalizer<'a, 'b, 'tcx
                         }
 
                         let args = data.args.fold_with(self);
-                        let generic_ty = self.cx().type_of(data.def_id);
+                        let generic_ty = self.cx().type_of(data.ctor.expect_def());
                         let concrete_ty = generic_ty.instantiate(self.cx(), args);
                         self.depth += 1;
                         let folded_ty = self.fold_ty(concrete_ty);

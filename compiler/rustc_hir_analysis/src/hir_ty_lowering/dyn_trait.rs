@@ -147,7 +147,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             });
 
             let key = (
-                proj.skip_binder().projection_term.def_id,
+                proj.skip_binder().def_id(),
                 tcx.anonymize_bound_vars(
                     proj.map_bound(|proj| proj.projection_term.trait_ref(tcx)),
                 ),
@@ -247,7 +247,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
                         // the discussion in #56288 for alternatives.
                         if !references_self {
                             let key = (
-                                pred.skip_binder().projection_term.def_id,
+                                pred.skip_binder().def_id(),
                                 tcx.anonymize_bound_vars(
                                     pred.map_bound(|proj| proj.projection_term.trait_ref(tcx)),
                                 ),

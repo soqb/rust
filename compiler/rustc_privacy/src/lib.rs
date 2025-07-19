@@ -221,14 +221,15 @@ where
                     return V::Result::output();
                 }
 
+                let def_id = data.ctor.expect_def();
                 try_visit!(self.def_id_visitor.visit_def_id(
-                    data.def_id,
+                    def_id,
                     match kind {
                         ty::Inherent | ty::Projection => "associated type",
                         ty::Free => "type alias",
                         ty::Opaque => unreachable!(),
                     },
-                    &LazyDefPathStr { def_id: data.def_id, tcx },
+                    &LazyDefPathStr { def_id, tcx },
                 ));
 
                 // This will also visit args if necessary, so we don't need to recurse.
@@ -257,7 +258,8 @@ where
                     try_visit!(self.def_id_visitor.visit_def_id(def_id, "trait", &trait_ref));
                 }
             }
-            ty::Alias(ty::Opaque, ty::AliasTy { def_id, .. }) => {
+            ty::Alias(ty::Opaque, ty::AliasTy { ctor, .. }) => {
+                let def_id = ctor.expect_def();
                 // Skip repeated `Opaque`s to avoid infinite recursion.
                 if self.visited_opaque_tys.insert(def_id) {
                     // The intent is to treat `impl Trait1 + Trait2` identically to

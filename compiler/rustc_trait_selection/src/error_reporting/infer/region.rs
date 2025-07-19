@@ -825,9 +825,10 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                 }
             } else if let GenericKind::Alias(ref p) = bound_kind
                 && let ty::Projection = p.kind(self.tcx)
-                && let DefKind::AssocTy = self.tcx.def_kind(p.def_id)
+                && let def_id = p.ctor.expect_def()
+                && let DefKind::AssocTy = self.tcx.def_kind(def_id)
                 && let Some(ty::ImplTraitInTraitData::Trait { .. }) =
-                    self.tcx.opt_rpitit_info(p.def_id)
+                    self.tcx.opt_rpitit_info(def_id)
             {
                 // The lifetime found in the `impl` is longer than the one on the RPITIT.
                 // Do not suggest `<Type as Trait>::{opaque}: 'static`.

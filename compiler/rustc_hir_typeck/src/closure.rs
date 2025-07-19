@@ -305,12 +305,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         closure_kind: hir::ClosureKind,
     ) -> (Option<ExpectedSig<'tcx>>, Option<ty::ClosureKind>) {
         match *expected_ty.kind() {
-            ty::Alias(ty::Opaque, ty::AliasTy { def_id, args, .. }) => self
+            ty::Alias(ty::Opaque, ty::AliasTy { ctor, args, .. }) => self
                 .deduce_closure_signature_from_predicates(
                     expected_ty,
                     closure_kind,
-                    self.tcx
-                        .explicit_item_self_bounds(def_id)
+                    ctor.explicit_self_bounds(self.tcx)
                         .iter_instantiated_copied(self.tcx, args)
                         .map(|(c, s)| (c.as_predicate(), s)),
                 ),
@@ -1024,9 +1023,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     "this projection should have been projected to an opaque type",
                 ));
             }
-            ty::Alias(ty::Opaque, ty::AliasTy { def_id, args, .. }) => self
-                .tcx
-                .explicit_item_self_bounds(def_id)
+            ty::Alias(ty::Opaque, ty::AliasTy { ctor, args, .. }) => ctor
+                .explicit_self_bounds(self.tcx)
                 .iter_instantiated_copied(self.tcx, args)
                 .find_map(|(p, s)| get_future_output(p.as_predicate(), s))?,
             ty::Error(_) => return Some(ret_ty),
@@ -1082,11 +1080,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // The `Future` trait has only one associated item, `Output`,
         // so check that this is what we see.
         let output_assoc_item = self.tcx.associated_item_def_ids(trait_def_id)[0];
-        if output_assoc_item != predicate.projection_term.def_id {
+        if output_assoc_item != predicate.def_id() {
             span_bug!(
                 cause_span,
                 "projecting associated item `{:?}` from future, which is not Output `{:?}`",
-                predicate.projection_term.def_id,
+                predicate.def_id(),
                 output_assoc_item,
             );
         }

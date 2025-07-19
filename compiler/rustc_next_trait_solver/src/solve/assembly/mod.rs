@@ -730,7 +730,7 @@ where
             AliasBoundKind::SelfBounds => {
                 for assumption in self
                     .cx()
-                    .item_self_bounds(alias_ty.def_id)
+                    .alias_self_bounds(alias_ty.ctor)
                     .iter_instantiated(self.cx(), alias_ty.args)
                 {
                     candidates.extend(G::probe_and_consider_implied_clause(
@@ -745,7 +745,7 @@ where
             AliasBoundKind::NonSelfBounds => {
                 for assumption in self
                     .cx()
-                    .item_non_self_bounds(alias_ty.def_id)
+                    .alias_non_self_bounds(alias_ty.ctor)
                     .iter_instantiated(self.cx(), alias_ty.args)
                 {
                     candidates.extend(G::probe_and_consider_implied_clause(

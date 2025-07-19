@@ -244,8 +244,11 @@ fn trait_object_ty<'tcx>(tcx: TyCtxt<'tcx>, poly_trait_ref: ty::PolyTraitRef<'tc
                 .filter(|item| !tcx.generics_require_sized_self(item.def_id))
                 .map(move |assoc_ty| {
                     super_poly_trait_ref.map_bound(|super_trait_ref| {
-                        let alias_ty =
-                            ty::AliasTy::new_from_args(tcx, assoc_ty.def_id, super_trait_ref.args);
+                        let alias_ty = ty::AliasTy::new_from_args(
+                            tcx,
+                            assoc_ty.def_id.into(),
+                            super_trait_ref.args,
+                        );
                         let resolved = tcx.normalize_erasing_regions(
                             ty::TypingEnv::fully_monomorphized(),
                             alias_ty.to_ty(tcx),

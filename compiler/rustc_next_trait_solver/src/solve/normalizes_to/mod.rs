@@ -461,7 +461,7 @@ where
         let pred = ty::ProjectionPredicate {
             projection_term: ty::AliasTerm::new(
                 cx,
-                goal.predicate.def_id(),
+                goal.predicate.ctor(),
                 [goal.predicate.self_ty(), inputs],
             ),
             term: output.into(),
@@ -515,7 +515,7 @@ where
                 (
                     ty::AliasTerm::new(
                         cx,
-                        goal.predicate.def_id(),
+                        goal.predicate.ctor(),
                         [goal.predicate.self_ty(), tupled_inputs_ty],
                     ),
                     output_coroutine_ty.into(),
@@ -524,7 +524,7 @@ where
                 (
                     ty::AliasTerm::new(
                         cx,
-                        goal.predicate.def_id(),
+                        goal.predicate.ctor(),
                         [
                             I::GenericArg::from(goal.predicate.self_ty()),
                             tupled_inputs_ty.into(),
@@ -537,7 +537,7 @@ where
                 (
                     ty::AliasTerm::new(
                         cx,
-                        goal.predicate.def_id(),
+                        goal.predicate.ctor(),
                         [goal.predicate.self_ty(), tupled_inputs_ty],
                     ),
                     coroutine_return_ty.into(),
@@ -732,7 +732,7 @@ where
             CandidateSource::BuiltinImpl(BuiltinImplSource::Misc),
             goal,
             ty::ProjectionPredicate {
-                projection_term: ty::AliasTerm::new(ecx.cx(), goal.predicate.def_id(), [self_ty]),
+                projection_term: ty::AliasTerm::new(ecx.cx(), goal.predicate.ctor(), [self_ty]),
                 term,
             }
             .upcast(cx),
@@ -764,7 +764,7 @@ where
             CandidateSource::BuiltinImpl(BuiltinImplSource::Misc),
             goal,
             ty::ProjectionPredicate {
-                projection_term: ty::AliasTerm::new(ecx.cx(), goal.predicate.def_id(), [self_ty]),
+                projection_term: ty::AliasTerm::new(ecx.cx(), goal.predicate.ctor(), [self_ty]),
                 term,
             }
             .upcast(cx),
@@ -849,7 +849,7 @@ where
             ty::ProjectionPredicate {
                 projection_term: ty::AliasTerm::new(
                     ecx.cx(),
-                    goal.predicate.def_id(),
+                    goal.predicate.ctor(),
                     [self_ty, coroutine.resume_ty()],
                 ),
                 term,

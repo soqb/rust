@@ -800,9 +800,10 @@ where
 
     fn fold_ty(&mut self, ty: Ty<'tcx>) -> Ty<'tcx> {
         if let ty::Alias(ty::Projection, proj) = ty.kind()
-            && self.cx().is_impl_trait_in_trait(proj.def_id)
+            && self.cx().is_impl_trait_in_trait(proj.ctor)
         {
-            if let Some((ty, _)) = self.types.get(&proj.def_id) {
+            let def_id = proj.ctor.expect_def();
+            if let Some((ty, _)) = self.types.get(&def_id) {
                 return *ty;
             }
             //FIXME(RPITIT): Deny nested RPITIT in args too
@@ -811,12 +812,10 @@ where
             }
             // Replace with infer var
             let infer_ty = self.ocx.infcx.next_ty_var(self.span);
-            self.types.insert(proj.def_id, (infer_ty, proj.args));
+            self.types.insert(def_id, (infer_ty, proj.args));
             // Recurse into bounds
-            for (pred, pred_span) in self
-                .cx()
-                .explicit_item_bounds(proj.def_id)
-                .iter_instantiated_copied(self.cx(), proj.args)
+            for (pred, pred_span) in
+                proj.ctor.explicit_bounds(self.cx()).iter_instantiated_copied(self.cx(), proj.args)
             {
                 let pred = pred.fold_with(self);
                 let pred = self.ocx.normalize(
@@ -830,7 +829,7 @@ where
                     ObligationCause::new(
                         self.span,
                         self.body_id,
-                        ObligationCauseCode::WhereClause(proj.def_id, pred_span),
+                        ObligationCauseCode::WhereClause(def_id, pred_span),
                     ),
                     self.param_env,
                     pred,
@@ -902,7 +901,7 @@ impl<'tcx> ty::FallibleTypeFolder<TyCtxt<'tcx>> for RemapHiddenTyRegions<'tcx> {
             let guar = match region.opt_param_def_id(self.tcx, self.impl_m_def_id) {
                 Some(def_id) => {
                     let return_span = if let ty::Alias(ty::Opaque, opaque_ty) = self.ty.kind() {
-                        self.tcx.def_span(opaque_ty.def_id)
+                        opaque_ty.ctor.span(self.tcx)
                     } else {
                         self.return_span
                     };
@@ -2521,7 +2520,7 @@ fn param_env_with_gat_bounds<'tcx>(
 
         match normalize_impl_ty.kind() {
             ty::Alias(ty::Projection, proj)
-                if proj.def_id == trait_ty.def_id && proj.args == rebased_args =>
+                if proj.ctor.expect_def() == trait_ty.def_id && proj.args == rebased_args =>
             {
                 // Don't include this predicate if the projected type is
                 // exactly the same as the projection. This can occur in
@@ -2534,7 +2533,7 @@ fn param_env_with_gat_bounds<'tcx>(
                     ty::ProjectionPredicate {
                         projection_term: ty::AliasTerm::new_from_args(
                             tcx,
-                            trait_ty.def_id,
+                            trait_ty.def_id.into(),
                             rebased_args,
                         ),
                         term: normalize_impl_ty.into(),
@@ -2563,12 +2562,13 @@ fn try_report_async_mismatch<'tcx>(
         return Ok(());
     }
 
-    let ty::Alias(ty::Projection, ty::AliasTy { def_id: async_future_def_id, .. }) =
+    let ty::Alias(ty::Projection, ty::AliasTy { ctor: async_future_ctor, .. }) =
         *tcx.fn_sig(trait_m.def_id).skip_binder().skip_binder().output().kind()
     else {
         bug!("expected `async fn` to return an RPITIT");
     };
 
+    let async_future_def_id = async_future_ctor.expect_def();
     for error in errors {
         if let ObligationCauseCode::WhereClause(def_id, _) = *error.root_obligation.cause.code()
             && def_id == async_future_def_id

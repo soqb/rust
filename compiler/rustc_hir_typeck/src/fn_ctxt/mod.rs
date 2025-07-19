@@ -423,10 +423,9 @@ impl<'tcx> HirTyLowerer<'tcx> for FnCtxt<'_, 'tcx> {
             // WF obligations that are registered elsewhere, but they have a
             // better cause code assigned to them in `add_required_obligations_for_hir`.
             // This means that they should shadow obligations with worse spans.
-            if let ty::Alias(ty::Projection | ty::Free, ty::AliasTy { args, def_id, .. }) =
-                ty.kind()
+            if let ty::Alias(ty::Projection | ty::Free, ty::AliasTy { args, ctor, .. }) = ty.kind()
             {
-                self.add_required_obligations_for_hir(span, *def_id, args, hir_id);
+                self.add_required_obligations_for_hir(span, ctor.expect_def(), args, hir_id);
             }
 
             self.normalize(span, ty)

@@ -510,7 +510,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let expected_ty = expectation.to_option(self)?;
         let (def_id, args) = match *expected_ty.kind() {
             // FIXME: Could also check that the RPIT is not defined
-            ty::Alias(ty::Opaque, alias_ty) => (alias_ty.def_id.as_local()?, alias_ty.args),
+            ty::Alias(ty::Opaque, alias_ty) => {
+                (alias_ty.ctor.expect_def().as_local()?, alias_ty.args)
+            }
             // FIXME(-Znext-solver=no): Remove this branch once `replace_opaque_types_with_infer` is gone.
             ty::Infer(ty::TyVar(_)) => self
                 .inner

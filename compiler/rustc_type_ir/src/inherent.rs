@@ -52,23 +52,27 @@ pub trait Ty<I: Interner<Ty = Self>>:
 
     fn new_alias(interner: I, kind: ty::AliasTyKind, alias_ty: ty::AliasTy<I>) -> Self;
 
-    fn new_projection_from_args(interner: I, def_id: I::DefId, args: I::GenericArgs) -> Self {
+    fn new_projection_from_args(
+        interner: I,
+        ctor: impl Into<I::AliasCtor>,
+        args: I::GenericArgs,
+    ) -> Self {
         Ty::new_alias(
             interner,
             ty::AliasTyKind::Projection,
-            ty::AliasTy::new_from_args(interner, def_id, args),
+            ty::AliasTy::new_from_args(interner, ctor.into(), args),
         )
     }
 
     fn new_projection(
         interner: I,
-        def_id: I::DefId,
+        ctor: impl Into<I::AliasCtor>,
         args: impl IntoIterator<Item: Into<I::GenericArg>>,
     ) -> Self {
         Ty::new_alias(
             interner,
             ty::AliasTyKind::Projection,
-            ty::AliasTy::new(interner, def_id, args),
+            ty::AliasTy::new(interner, ctor.into(), args),
         )
     }
 
@@ -216,6 +220,20 @@ pub trait Safety<I: Interner<Safety = Self>>: Copy + Debug + Hash + Eq {
     fn is_safe(self) -> bool;
 
     fn prefix_str(self) -> &'static str;
+}
+
+pub trait AliasCtor<I: Interner<AliasCtor = Self>>:
+    Copy + Debug + Hash + Eq + From<I::DefId> + TypeFoldable<I> + TypeVisitable<I>
+{
+    fn expect_def(self) -> I::DefId;
+
+    fn temp_unwrap_def(self) -> I::DefId;
+
+    fn span(self, cx: I) -> I::Span;
+
+    fn bounds(self, cx: I) -> ty::EarlyBinder<I, I::Clauses>;
+    fn self_bounds(self, cx: I) -> ty::EarlyBinder<I, I::Clauses>;
+    fn non_self_bounds(self, cx: I) -> ty::EarlyBinder<I, I::Clauses>;
 }
 
 pub trait Region<I: Interner<Region = Self>>:

@@ -1665,7 +1665,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
         let self_ty = projection_term.self_ty();
 
         with_forced_trimmed_paths! {
-            if self.tcx.is_lang_item(projection_term.def_id, LangItem::FnOnceOutput) {
+            if self.tcx.is_lang_item(projection_term.ctor.expect_def(), LangItem::FnOnceOutput) {
                 let (span, closure_span) = if let ty::Closure(def_id, _) = self_ty.kind() {
                     let def_span = self.tcx.def_span(def_id);
                     if let Some(local_def_id) = def_id.as_local()

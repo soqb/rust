@@ -287,7 +287,7 @@ fn extend_cause_with_original_assoc_item_obligation<'tcx>(
     let ty_to_impl_span = |ty: Ty<'_>| {
         if let ty::Alias(ty::Projection, projection_ty) = ty.kind()
             && let Some(&impl_item_id) =
-                tcx.impl_item_implementor_ids(impl_def_id).get(&projection_ty.def_id)
+                tcx.impl_item_implementor_ids(impl_def_id).get(&projection_ty.ctor.expect_def())
             && let Some(impl_item) =
                 items.iter().find(|item| item.owner_id.to_def_id() == impl_item_id)
         {
@@ -479,7 +479,7 @@ impl<'a, 'tcx> WfPredicates<'a, 'tcx> {
         //     `i32: Clone`
         //     `i32: Copy`
         // ]
-        let obligations = self.nominal_obligations(data.def_id, data.args);
+        let obligations = self.nominal_obligations(data.ctor.expect_def(), data.args);
         self.out.extend(obligations);
 
         self.add_wf_preds_for_projection_args(data.args);
@@ -508,7 +508,7 @@ impl<'a, 'tcx> WfPredicates<'a, 'tcx> {
                 self.recursion_depth,
                 &mut self.out,
             );
-            let obligations = self.nominal_obligations(data.def_id, args);
+            let obligations = self.nominal_obligations(data.ctor.expect_def(), args);
             self.out.extend(obligations);
         }
 
@@ -782,7 +782,7 @@ impl<'a, 'tcx> TypeVisitor<TyCtxt<'tcx>> for WfPredicates<'a, 'tcx> {
             }
 
             ty::Alias(ty::Projection | ty::Opaque | ty::Free, data) => {
-                let obligations = self.nominal_obligations(data.def_id, data.args);
+                let obligations = self.nominal_obligations(data.ctor.expect_def(), data.args);
                 self.out.extend(obligations);
             }
             ty::Alias(ty::Inherent, data) => {

@@ -236,7 +236,7 @@ impl<'cx, 'tcx> VerifyBoundCx<'cx, 'tcx> {
                 // And therefore we can safely use structural equality for alias types.
                 (GenericKind::Param(p1), ty::Param(p2)) if p1 == p2 => {}
                 (GenericKind::Placeholder(p1), ty::Placeholder(p2)) if p1 == p2 => {}
-                (GenericKind::Alias(a1), ty::Alias(_, a2)) if a1.def_id == a2.def_id => {}
+                (GenericKind::Alias(a1), ty::Alias(_, a2)) if a1.ctor == a2.ctor => {}
                 _ => return None,
             }
 
@@ -281,7 +281,7 @@ impl<'cx, 'tcx> VerifyBoundCx<'cx, 'tcx> {
         alias_ty: ty::AliasTy<'tcx>,
     ) -> impl Iterator<Item = ty::Region<'tcx>> {
         let tcx = self.tcx;
-        let bounds = tcx.item_self_bounds(alias_ty.def_id);
+        let bounds = alias_ty.ctor.self_bounds(tcx);
         trace!("{:#?}", bounds.skip_binder());
         bounds
             .iter_instantiated(tcx, alias_ty.args)

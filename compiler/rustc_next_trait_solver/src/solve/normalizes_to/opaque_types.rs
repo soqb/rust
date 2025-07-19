@@ -19,6 +19,7 @@ where
     ) -> QueryResult<I> {
         let cx = self.cx();
         let opaque_ty = goal.predicate.alias;
+        let opaque_def_id = opaque_ty.ctor.expect_def();
         let expected = goal.predicate.term.as_type().expect("no such thing as an opaque const");
 
         match self.typing_mode() {
@@ -26,7 +27,7 @@ where
                 // An impossible opaque type bound is the only way this goal will fail
                 // e.g. assigning `impl Copy := NotCopy`
                 self.add_item_bounds_for_hidden_type(
-                    opaque_ty.def_id,
+                    opaque_def_id,
                     opaque_ty.args,
                     goal.param_env,
                     expected,
@@ -42,8 +43,7 @@ where
                 defining_opaque_types_and_generators: defining_opaque_types,
             }
             | TypingMode::Borrowck { defining_opaque_types } => {
-                let Some(def_id) = opaque_ty
-                    .def_id
+                let Some(def_id) = opaque_def_id
                     .as_local()
                     .filter(|&def_id| defining_opaque_types.contains(&def_id))
                 else {
@@ -106,8 +106,7 @@ where
                 self.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
             }
             TypingMode::PostBorrowckAnalysis { defined_opaque_types } => {
-                let Some(def_id) = opaque_ty
-                    .def_id
+                let Some(def_id) = opaque_def_id
                     .as_local()
                     .filter(|&def_id| defined_opaque_types.contains(&def_id))
                 else {
@@ -128,7 +127,7 @@ where
             }
             TypingMode::PostAnalysis => {
                 // FIXME: Add an assertion that opaque type storage is empty.
-                let actual = cx.type_of(opaque_ty.def_id).instantiate(cx, opaque_ty.args);
+                let actual = cx.type_of(opaque_def_id).instantiate(cx, opaque_ty.args);
                 self.eq(goal.param_env, expected, actual)?;
                 self.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
             }

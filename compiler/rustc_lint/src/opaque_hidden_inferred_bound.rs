@@ -99,7 +99,7 @@ impl<'tcx> LateLintPass<'tcx> for OpaqueHiddenInferredBound {
 
                 // HACK: `impl Trait<Assoc = impl Trait2>` from an RPIT is "ok"...
                 if let ty::Alias(ty::Opaque, opaque_ty) = *proj_term.kind()
-                    && cx.tcx.parent(opaque_ty.def_id) == def_id
+                    && cx.tcx.parent(opaque_ty.ctor.expect_def()) == def_id
                     && matches!(
                         opaque.origin,
                         hir::OpaqueTyOrigin::FnReturn { .. } | hir::OpaqueTyOrigin::AsyncFn { .. }
@@ -124,11 +124,8 @@ impl<'tcx> LateLintPass<'tcx> for OpaqueHiddenInferredBound {
                     return;
                 }
 
-                let proj_ty = Ty::new_projection_from_args(
-                    cx.tcx,
-                    proj.projection_term.def_id,
-                    proj.projection_term.args,
-                );
+                let proj_ty =
+                    Ty::new_projection_from_args(cx.tcx, proj.def_id(), proj.projection_term.args);
                 // For every instance of the projection type in the bounds,
                 // replace them with the term we're assigning to the associated
                 // type in our opaque type.
@@ -141,9 +138,10 @@ impl<'tcx> LateLintPass<'tcx> for OpaqueHiddenInferredBound {
                 // For example, in `impl Trait<Assoc = impl Send>`, for all of the bounds on `Assoc`,
                 // e.g. `type Assoc: OtherTrait`, replace `<impl Trait as Trait>::Assoc: OtherTrait`
                 // with `impl Send: OtherTrait`.
-                for (assoc_pred, assoc_pred_span) in cx
-                    .tcx
-                    .explicit_item_bounds(proj.projection_term.def_id)
+                for (assoc_pred, assoc_pred_span) in proj
+                    .projection_term
+                    .ctor
+                    .explicit_bounds(cx.tcx)
                     .iter_instantiated_copied(cx.tcx, proj.projection_term.args)
                 {
                     let assoc_pred = assoc_pred.fold_with(proj_replacer);
@@ -171,10 +169,10 @@ impl<'tcx> LateLintPass<'tcx> for OpaqueHiddenInferredBound {
                         // then we can emit a suggestion to add the bound.
                         let add_bound = match (proj_term.kind(), assoc_pred.kind().skip_binder()) {
                             (
-                                ty::Alias(ty::Opaque, ty::AliasTy { def_id, .. }),
+                                ty::Alias(ty::Opaque, ty::AliasTy { ctor, .. }),
                                 ty::ClauseKind::Trait(trait_pred),
                             ) => Some(AddBound {
-                                suggest_span: cx.tcx.def_span(*def_id).shrink_to_hi(),
+                                suggest_span: ctor.span(cx.tcx).shrink_to_hi(),
                                 trait_ref: trait_pred.print_modifiers_and_trait_path(),
                             }),
                             _ => None,

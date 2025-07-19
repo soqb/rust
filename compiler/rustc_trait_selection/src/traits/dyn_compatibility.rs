@@ -742,7 +742,7 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for IllegalSelfTypeVisitor<'tcx> {
                     ControlFlow::Continue(())
                 }
             }
-            ty::Alias(ty::Projection, data) if self.tcx.is_impl_trait_in_trait(data.def_id) => {
+            ty::Alias(ty::Projection, data) if self.tcx.is_impl_trait_in_trait(data.ctor) => {
                 // We'll deny these later in their own pass
                 ControlFlow::Continue(())
             }
@@ -866,10 +866,10 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for IllegalRpititVisitor<'tcx> {
     fn visit_ty(&mut self, ty: Ty<'tcx>) -> Self::Result {
         if let ty::Alias(ty::Projection, proj) = *ty.kind()
             && Some(proj) != self.allowed
-            && self.tcx.is_impl_trait_in_trait(proj.def_id)
+            && self.tcx.is_impl_trait_in_trait(proj.ctor)
         {
             ControlFlow::Break(MethodViolationCode::ReferencesImplTraitInTrait(
-                self.tcx.def_span(proj.def_id),
+                proj.ctor.span(self.tcx),
             ))
         } else {
             ty.super_visit_with(self)

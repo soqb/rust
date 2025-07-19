@@ -173,10 +173,11 @@ fn evaluate_host_effect_from_conditionally_const_item_bounds<'tcx>(
 
     let mut consider_ty = obligation.predicate.self_ty();
     while let ty::Alias(kind @ (ty::Projection | ty::Opaque), alias_ty) = *consider_ty.kind() {
-        if tcx.is_conditionally_const(alias_ty.def_id) {
+        let def_id = alias_ty.ctor.expect_def();
+        if tcx.is_conditionally_const(def_id) {
             for clause in elaborate(
                 tcx,
-                tcx.explicit_implied_const_bounds(alias_ty.def_id)
+                tcx.explicit_implied_const_bounds(def_id)
                     .iter_instantiated_copied(tcx, alias_ty.args)
                     .map(|(trait_ref, _)| {
                         trait_ref.to_host_effect_clause(tcx, obligation.predicate.constness)
@@ -219,6 +220,7 @@ fn evaluate_host_effect_from_conditionally_const_item_bounds<'tcx>(
     }
 
     if let Some((data, alias_ty)) = candidate {
+        let def_id = alias_ty.ctor.expect_def();
         Ok(match_candidate(selcx, obligation, data, true, |selcx, nested| {
             // An alias bound only holds if we also check the const conditions
             // of the alias, so we need to register those, too.
@@ -227,7 +229,7 @@ fn evaluate_host_effect_from_conditionally_const_item_bounds<'tcx>(
                 obligation.param_env,
                 obligation.cause.clone(),
                 obligation.recursion_depth,
-                tcx.const_conditions(alias_ty.def_id).instantiate(tcx, alias_ty.args),
+                tcx.const_conditions(def_id).instantiate(tcx, alias_ty.args),
                 nested,
             );
             nested.extend(const_conditions.into_iter().map(|(trait_ref, _)| {
@@ -254,7 +256,8 @@ fn evaluate_host_effect_from_item_bounds<'tcx>(
 
     let mut consider_ty = obligation.predicate.self_ty();
     while let ty::Alias(kind @ (ty::Projection | ty::Opaque), alias_ty) = *consider_ty.kind() {
-        for clause in tcx.item_bounds(alias_ty.def_id).iter_instantiated(tcx, alias_ty.args) {
+        let def_id = alias_ty.ctor.expect_def();
+        for clause in tcx.item_bounds(def_id).iter_instantiated(tcx, alias_ty.args) {
             let bound_clause = clause.kind();
             let ty::ClauseKind::HostEffect(data) = bound_clause.skip_binder() else {
                 continue;

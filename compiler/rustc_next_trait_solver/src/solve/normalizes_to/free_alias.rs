@@ -4,6 +4,7 @@
 //! Since a free alias is never ambiguous, this just computes the `type_of` of
 //! the alias and registers the where-clauses of the type alias.
 
+use rustc_type_ir::inherent::*;
 use rustc_type_ir::{self as ty, Interner};
 
 use crate::delegate::SolverDelegate;
@@ -24,13 +25,13 @@ where
         // Check where clauses
         self.add_goals(
             GoalSource::Misc,
-            cx.predicates_of(free_alias.def_id)
+            cx.predicates_of(free_alias.ctor.expect_def())
                 .iter_instantiated(cx, free_alias.args)
                 .map(|pred| goal.with(cx, pred)),
         );
 
         let actual = if free_alias.kind(cx).is_type() {
-            cx.type_of(free_alias.def_id).instantiate(cx, free_alias.args)
+            cx.type_of_alias(free_alias.ctor).instantiate(cx, free_alias.args)
         } else {
             // FIXME(mgca): once const items are actual aliases defined as equal to type system consts
             // this should instead return that.

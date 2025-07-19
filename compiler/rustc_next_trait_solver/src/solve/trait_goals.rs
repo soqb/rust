@@ -229,8 +229,9 @@ where
         //
         // See tests/ui/impl-trait/auto-trait-leakage/avoid-query-cycle-via-item-bound.rs.
         if let ty::Alias(ty::Opaque, opaque_ty) = goal.predicate.self_ty().kind() {
-            debug_assert!(ecx.opaque_type_is_rigid(opaque_ty.def_id));
-            for item_bound in cx.item_self_bounds(opaque_ty.def_id).skip_binder() {
+            let def_id = opaque_ty.ctor.expect_def();
+            debug_assert!(ecx.opaque_type_is_rigid(def_id));
+            for item_bound in cx.item_self_bounds(def_id).skip_binder() {
                 if item_bound
                     .as_trait_clause()
                     .is_some_and(|b| b.def_id() == goal.predicate.def_id())

@@ -114,9 +114,10 @@ impl<'tcx> LateLintPass<'tcx> for UnusedResults {
 
         if let hir::ExprKind::Match(await_expr, _arms, hir::MatchSource::AwaitDesugar) = expr.kind
             && let ty = cx.typeck_results().expr_ty(await_expr)
-            && let ty::Alias(ty::Opaque, ty::AliasTy { def_id: future_def_id, .. }) = ty.kind()
+            && let ty::Alias(ty::Opaque, ty::AliasTy { ctor: future_ctor, .. }) = ty.kind()
             && cx.tcx.ty_is_opaque_future(ty)
-            && let async_fn_def_id = cx.tcx.parent(*future_def_id)
+            && let future_def_id = future_ctor.expect_def()
+            && let async_fn_def_id = cx.tcx.parent(future_def_id)
             && matches!(cx.tcx.def_kind(async_fn_def_id), DefKind::Fn | DefKind::AssocFn)
             // Check that this `impl Future` actually comes from an `async fn`
             && cx.tcx.asyncness(async_fn_def_id).is_async()
@@ -294,8 +295,8 @@ impl<'tcx> LateLintPass<'tcx> for UnusedResults {
                         .map(|inner| MustUsePath::Pinned(Box::new(inner)))
                 }
                 ty::Adt(def, _) => is_def_must_use(cx, def.did(), span),
-                ty::Alias(ty::Opaque | ty::Projection, ty::AliasTy { def_id: def, .. }) => {
-                    elaborate(cx.tcx, cx.tcx.explicit_item_self_bounds(def).iter_identity_copied())
+                ty::Alias(ty::Opaque | ty::Projection, ty::AliasTy { ctor, .. }) => {
+                    elaborate(cx.tcx, ctor.explicit_self_bounds(cx.tcx).iter_identity_copied())
                         // We only care about self bounds for the impl-trait
                         .filter_only_self()
                         .find_map(|(pred, _span)| {

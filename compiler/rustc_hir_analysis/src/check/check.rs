@@ -502,7 +502,7 @@ fn sanity_check_found_hidden_type<'tcx>(
         return Ok(());
     }
     if let ty::Alias(ty::Opaque, alias) = ty.ty.kind() {
-        if alias.def_id == key.def_id.to_def_id() && alias.args == key.args {
+        if alias.ctor.expect_def() == key.def_id.to_def_id() && alias.args == key.args {
             // Nothing was actually constrained, this is an opaque usage that was
             // only discovered to be opaque after inference vars resolved.
             return Ok(());
@@ -1929,8 +1929,8 @@ fn opaque_type_cycle_error(tcx: TyCtxt<'_>, opaque_def_id: LocalDefId) -> ErrorG
                 impl<'tcx> ty::TypeVisitor<TyCtxt<'tcx>> for OpaqueTypeCollector {
                     fn visit_ty(&mut self, t: Ty<'tcx>) {
                         match *t.kind() {
-                            ty::Alias(ty::Opaque, ty::AliasTy { def_id: def, .. }) => {
-                                self.opaques.push(def);
+                            ty::Alias(ty::Opaque, ty::AliasTy { ctor, .. }) => {
+                                self.opaques.push(ctor.expect_def());
                             }
                             ty::Closure(def_id, ..) | ty::Coroutine(def_id, ..) => {
                                 self.closures.push(def_id);
@@ -1964,9 +1964,9 @@ fn opaque_type_cycle_error(tcx: TyCtxt<'_>, opaque_def_id: LocalDefId) -> ErrorG
                             if let ty::GenericArgKind::Type(ty) = arg.kind()
                                 && let ty::Alias(
                                     ty::Opaque,
-                                    ty::AliasTy { def_id: captured_def_id, .. },
+                                    ty::AliasTy { ctor: captured_ctor, .. },
                                 ) = *ty.kind()
-                                && captured_def_id == opaque_def_id.to_def_id()
+                                && captured_ctor.expect_def() == opaque_def_id.to_def_id()
                             {
                                 err.span_label(
                                     span,

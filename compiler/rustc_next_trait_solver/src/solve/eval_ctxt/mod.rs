@@ -977,8 +977,8 @@ where
             //
             // Alternatively we could modify `Equate` for this case by adding another
             // variant to `StructurallyRelateAliases`.
-            let identity_args = self.fresh_args_for_item(alias.def_id);
-            let rigid_ctor = ty::AliasTerm::new_from_args(cx, alias.def_id, identity_args);
+            let identity_args = self.fresh_args_for_alias(alias.ctor);
+            let rigid_ctor = ty::AliasTerm::new_from_args(cx, alias.ctor, identity_args);
             let ctor_term = rigid_ctor.to_term(cx);
             let obligations = self.delegate.eq_structurally_relating_aliases(
                 param_env,
@@ -1103,6 +1103,10 @@ where
             self.inspect.add_var_value(arg);
         }
         args
+    }
+
+    pub(super) fn fresh_args_for_alias(&mut self, ctor: I::AliasCtor) -> I::GenericArgs {
+        self.fresh_args_for_item(ctor.temp_unwrap_def())
     }
 
     pub(super) fn register_ty_outlives(&self, ty: I::Ty, lt: I::Region) {

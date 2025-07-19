@@ -244,11 +244,12 @@ impl<'tcx> Printer<'tcx> for LegacySymbolMangler<'tcx> {
         match *ty.kind() {
             // Print all nominal types as paths (unlike `pretty_print_type`).
             ty::FnDef(def_id, args)
-            | ty::Alias(ty::Projection | ty::Opaque, ty::AliasTy { def_id, args, .. })
             | ty::Closure(def_id, args)
             | ty::CoroutineClosure(def_id, args)
             | ty::Coroutine(def_id, args) => self.print_def_path(def_id, args),
-
+            ty::Alias(ty::Projection | ty::Opaque, ty::AliasTy { ctor, args, .. }) => {
+                self.print_def_path(ctor.expect_def(), args)
+            }
             // The `pretty_print_type` formatting of array size depends on
             // -Zverbose-internals flag, so we cannot reuse it here.
             ty::Array(ty, size) => {

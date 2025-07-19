@@ -5,6 +5,7 @@
 //! 2. equate the self type, and
 //! 3. instantiate and register where clauses.
 
+use rustc_type_ir::inherent::*;
 use rustc_type_ir::{self as ty, Interner};
 
 use crate::delegate::SolverDelegate;
@@ -21,8 +22,9 @@ where
     ) -> QueryResult<I> {
         let cx = self.cx();
         let inherent = goal.predicate.alias;
+        let inherent_def_id = inherent.ctor.expect_def();
 
-        let impl_def_id = cx.parent(inherent.def_id);
+        let impl_def_id = cx.parent(inherent_def_id);
         let impl_args = self.fresh_args_for_item(impl_def_id);
 
         // Equate impl header and add impl where clauses
@@ -46,13 +48,13 @@ where
         // to be very careful when changing the impl where-clauses to be productive.
         self.add_goals(
             GoalSource::Misc,
-            cx.predicates_of(inherent.def_id)
+            cx.predicates_of(inherent_def_id)
                 .iter_instantiated(cx, inherent_args)
                 .map(|pred| goal.with(cx, pred)),
         );
 
         let normalized = if inherent.kind(cx).is_type() {
-            cx.type_of(inherent.def_id).instantiate(cx, inherent_args).into()
+            cx.type_of(inherent_def_id).instantiate(cx, inherent_args).into()
         } else {
             // FIXME(mgca): Properly handle IACs in the type system
             panic!("normalizing inherent associated consts in the type system is unsupported");

@@ -95,11 +95,11 @@ where
             Ok(ty::Binder::dummy(def.all_field_tys(cx).iter_instantiated(cx, args).collect()))
         }
 
-        ty::Alias(ty::Opaque, ty::AliasTy { def_id, args, .. }) => {
+        ty::Alias(ty::Opaque, ty::AliasTy { ctor, args, .. }) => {
             // We can resolve the `impl Trait` to its concrete type,
             // which enforces a DAG between the functions requiring
             // the auto trait bounds in question.
-            Ok(ty::Binder::dummy(vec![cx.type_of(def_id).instantiate(cx, args)]))
+            Ok(ty::Binder::dummy(vec![cx.type_of_alias(ctor).instantiate(cx, args)]))
         }
     }
 }
@@ -927,7 +927,7 @@ where
         source_projection: ty::Binder<I, ty::ProjectionPredicate<I>>,
         target_projection: ty::AliasTerm<I>,
     ) -> bool {
-        source_projection.item_def_id() == target_projection.def_id
+        I::AliasCtor::from(source_projection.item_def_id()) == target_projection.ctor
             && self
                 .ecx
                 .probe(|_| ProbeKind::ProjectionCompatibility)
@@ -951,7 +951,8 @@ where
             return Ok(None);
         }
 
-        let Some(replacements) = self.mapping.get(&alias_term.def_id) else {
+        let def_id = alias_term.ctor.temp_unwrap_def();
+        let Some(replacements) = self.mapping.get(&def_id) else {
             return Ok(None);
         };
 

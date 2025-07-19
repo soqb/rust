@@ -56,7 +56,6 @@ use rustc_data_structures::fx::{FxIndexMap, FxIndexSet};
 use rustc_errors::{
     Applicability, Diag, DiagStyledString, IntoDiagArg, MultiSpan, StringPart, pluralize,
 };
-use rustc_hir::def::DefKind;
 use rustc_hir::def_id::DefId;
 use rustc_hir::intravisit::Visitor;
 use rustc_hir::lang_items::LangItem;
@@ -179,15 +178,16 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
 
     pub fn get_impl_future_output_ty(&self, ty: Ty<'tcx>) -> Option<Ty<'tcx>> {
         let (def_id, args) = match *ty.kind() {
-            ty::Alias(_, ty::AliasTy { def_id, args, .. })
-                if matches!(self.tcx.def_kind(def_id), DefKind::OpaqueTy) =>
-            {
-                (def_id, args)
+            ty::Alias(ty::AliasTyKind::Opaque, ty::AliasTy { ctor, args, .. }) => {
+                (ctor.expect_def(), args)
             }
-            ty::Alias(_, ty::AliasTy { def_id, args, .. })
-                if self.tcx.is_impl_trait_in_trait(def_id) =>
-            {
-                (def_id, args)
+            ty::Alias(_, ty::AliasTy { ctor, args, .. }) => {
+                let def_id = ctor.temp_unwrap_def();
+                if self.tcx.is_impl_trait_in_trait(def_id) {
+                    (def_id, args)
+                } else {
+                    return None;
+                }
             }
             _ => return None,
         };
@@ -203,7 +203,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     .kind()
                     .map_bound(|kind| match kind {
                         ty::ClauseKind::Projection(projection_predicate)
-                            if projection_predicate.projection_term.def_id == item_def_id =>
+                            if projection_predicate.def_id() == item_def_id =>
                         {
                             projection_predicate.term.as_type()
                         }
@@ -1568,7 +1568,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                     }
                     ValuePairs::TraitRefs(_) => (false, Mismatch::Fixed("trait")),
                     ValuePairs::Aliases(ExpectedFound { expected, .. }) => {
-                        (false, Mismatch::Fixed(self.tcx.def_descr(expected.def_id)))
+                        (false, Mismatch::Fixed(self.tcx.alias_descr(expected.ctor)))
                     }
                     ValuePairs::Regions(_) => (false, Mismatch::Fixed("lifetime")),
                     ValuePairs::ExistentialTraitRef(_) => {
@@ -1763,9 +1763,10 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                         && values.expected.sort_string(self.tcx)
                             != values.found.sort_string(self.tcx);
                     let sort_string = |ty: Ty<'tcx>| match (extra, ty.kind()) {
-                        (true, ty::Alias(ty::Opaque, ty::AliasTy { def_id, .. })) => {
+                        (true, ty::Alias(ty::Opaque, ty::AliasTy { ctor, .. })) => {
+                            let def_id = ctor.expect_def();
                             let sm = self.tcx.sess.source_map();
-                            let pos = sm.lookup_char_pos(self.tcx.def_span(*def_id).lo());
+                            let pos = sm.lookup_char_pos(self.tcx.def_span(def_id).lo());
                             DiagStyledString::normal(format!(
                                 " (opaque type at <{}:{}:{}>)",
                                 sm.filename_for_diagnostics(&pos.file.name),
@@ -1774,10 +1775,11 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                             ))
                         }
                         (true, ty::Alias(ty::Projection, proj))
-                            if self.tcx.is_impl_trait_in_trait(proj.def_id) =>
+                            if self.tcx.is_impl_trait_in_trait(proj.ctor) =>
                         {
+                            let def_id = proj.ctor.expect_def();
                             let sm = self.tcx.sess.source_map();
-                            let pos = sm.lookup_char_pos(self.tcx.def_span(proj.def_id).lo());
+                            let pos = sm.lookup_char_pos(self.tcx.def_span(def_id).lo());
                             DiagStyledString::normal(format!(
                                 " (trait associated opaque type at <{}:{}:{}>)",
                                 sm.filename_for_diagnostics(&pos.file.name),
@@ -2502,10 +2504,10 @@ impl TyCategory {
     pub fn from_ty(tcx: TyCtxt<'_>, ty: Ty<'_>) -> Option<(Self, DefId)> {
         match *ty.kind() {
             ty::Closure(def_id, _) => Some((Self::Closure, def_id)),
-            ty::Alias(ty::Opaque, ty::AliasTy { def_id, .. }) => {
+            ty::Alias(ty::Opaque, ty::AliasTy { ctor, .. }) => {
                 let kind =
                     if tcx.ty_is_opaque_future(ty) { Self::OpaqueFuture } else { Self::Opaque };
-                Some((kind, def_id))
+                Some((kind, ctor.expect_def()))
             }
             ty::Coroutine(def_id, ..) => {
                 Some((Self::Coroutine(tcx.coroutine_kind(def_id).unwrap()), def_id))

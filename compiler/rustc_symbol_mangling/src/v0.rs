@@ -536,8 +536,8 @@ impl<'tcx> Printer<'tcx> for V0SymbolMangler<'tcx> {
 
             // We may still encounter projections here due to the printing
             // logic sometimes passing identity-substituted impl headers.
-            ty::Alias(ty::Projection, ty::AliasTy { def_id, args, .. }) => {
-                self.print_def_path(def_id, args)?;
+            ty::Alias(ty::Projection, ty::AliasTy { ctor, args, .. }) => {
+                self.print_def_path(ctor.expect_def(), args)?;
             }
 
             ty::Foreign(def_id) => {

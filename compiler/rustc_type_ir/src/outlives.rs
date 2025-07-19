@@ -227,7 +227,7 @@ pub fn compute_alias_components_recursive<I: Interner>(
     alias_ty: ty::AliasTy<I>,
     out: &mut SmallVec<[Component<I>; 4]>,
 ) {
-    let opt_variances = cx.opt_alias_variances(kind, alias_ty.def_id);
+    let opt_variances = cx.opt_alias_variances(kind, alias_ty.ctor);
 
     let mut visitor = OutlivesCollector { cx, out, visited: Default::default() };
 

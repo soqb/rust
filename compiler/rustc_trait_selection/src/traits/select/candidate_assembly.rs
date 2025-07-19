@@ -825,6 +825,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 }
 
                 ty::Alias(ty::Opaque, alias) => {
+                    let def_id = alias.ctor.expect_def();
                     if candidates.vec.iter().any(|c| matches!(c, ProjectionCandidate(_))) {
                         // We do not generate an auto impl candidate for `impl Trait`s which already
                         // reference our auto trait.
@@ -839,7 +840,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                         // We do not emit auto trait candidates for opaque types in coherence.
                         // Doing so can result in weird dependency cycles.
                         candidates.ambiguous = true;
-                    } else if self.infcx.can_define_opaque_ty(alias.def_id) {
+                    } else if self.infcx.can_define_opaque_ty(def_id) {
                         // We do not emit auto trait candidates for opaque types in their defining scope, as
                         // we need to know the hidden type first, which we can't reliably know within the defining
                         // scope.

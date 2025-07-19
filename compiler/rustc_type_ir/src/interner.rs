@@ -144,6 +144,7 @@ pub trait Interner:
         + SliceLike<Item = Self::Pat>;
     type Safety: Safety<Self>;
     type Abi: Abi<Self>;
+    type AliasCtor: AliasCtor<Self>;
 
     // Kinds of consts
     type Const: Const<Self>;
@@ -198,10 +199,11 @@ pub trait Interner:
     fn opt_alias_variances(
         self,
         kind: impl Into<ty::AliasTermKind>,
-        def_id: Self::DefId,
+        ctor: Self::AliasCtor,
     ) -> Option<Self::VariancesOf>;
 
     fn type_of(self, def_id: Self::DefId) -> ty::EarlyBinder<Self, Self::Ty>;
+    fn type_of_alias(self, ctor: Self::AliasCtor) -> ty::EarlyBinder<Self, Self::Ty>;
     fn type_of_opaque_hir_typeck(self, def_id: Self::LocalDefId)
     -> ty::EarlyBinder<Self, Self::Ty>;
 
@@ -227,7 +229,11 @@ pub trait Interner:
 
     fn check_args_compatible(self, def_id: Self::DefId, args: Self::GenericArgs) -> bool;
 
-    fn debug_assert_args_compatible(self, def_id: Self::DefId, args: Self::GenericArgs);
+    fn debug_assert_args_compatible(
+        self,
+        ctor: impl Into<Self::AliasCtor>,
+        args: Self::GenericArgs,
+    );
 
     /// Assert that the args from an `ExistentialTraitRef` or `ExistentialProjection`
     /// are compatible with the `DefId`.
@@ -276,6 +282,21 @@ pub trait Interner:
         def_id: Self::DefId,
     ) -> ty::EarlyBinder<Self, impl IntoIterator<Item = Self::Clause>>;
 
+    fn alias_bounds(
+        self,
+        ctor: Self::AliasCtor,
+    ) -> ty::EarlyBinder<Self, impl IntoIterator<Item = Self::Clause>>;
+
+    fn alias_self_bounds(
+        self,
+        ctor: Self::AliasCtor,
+    ) -> ty::EarlyBinder<Self, impl IntoIterator<Item = Self::Clause>>;
+
+    fn alias_non_self_bounds(
+        self,
+        ctor: Self::AliasCtor,
+    ) -> ty::EarlyBinder<Self, impl IntoIterator<Item = Self::Clause>>;
+
     fn predicates_of(
         self,
         def_id: Self::DefId,
@@ -305,7 +326,7 @@ pub trait Interner:
 
     fn impl_is_const(self, def_id: Self::ImplId) -> bool;
     fn fn_is_const(self, def_id: Self::FunctionId) -> bool;
-    fn alias_has_const_conditions(self, def_id: Self::DefId) -> bool;
+    fn alias_has_const_conditions(self, ctor: Self::AliasCtor) -> bool;
     fn const_conditions(
         self,
         def_id: Self::DefId,

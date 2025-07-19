@@ -998,7 +998,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             // Type aliases defined in crates that have the
             // feature `lazy_type_alias` enabled get encoded as a type alias that normalization will
             // then actually instantiate the where bounds of.
-            let alias_ty = ty::AliasTy::new_from_args(tcx, did, args);
+            let alias_ty = ty::AliasTy::new_from_args(tcx, did.into(), args);
             Ty::new_alias(tcx, ty::Free, alias_ty)
         } else {
             tcx.at(span).type_of(did).instantiate(tcx, args)
@@ -1214,7 +1214,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             LowerTypeRelativePathMode::Type(permit_variants),
         )? {
             TypeRelativePath::AssocItem(def_id, args) => {
-                let alias_ty = ty::AliasTy::new_from_args(tcx, def_id, args);
+                let alias_ty = ty::AliasTy::new_from_args(tcx, def_id.into(), args);
                 let ty = Ty::new_alias(tcx, alias_ty.kind(tcx), alias_ty);
                 Ok((ty, tcx.def_kind(def_id), def_id))
             }

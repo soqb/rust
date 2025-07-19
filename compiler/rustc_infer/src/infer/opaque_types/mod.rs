@@ -45,10 +45,11 @@ impl<'tcx> InferCtxt<'tcx> {
             lt_op: |lt| lt,
             ct_op: |ct| ct,
             ty_op: |ty| match *ty.kind() {
-                ty::Alias(ty::Opaque, ty::AliasTy { def_id, .. })
-                    if self.can_define_opaque_ty(def_id) && !ty.has_escaping_bound_vars() =>
+                ty::Alias(ty::Opaque, ty::AliasTy { ctor, .. })
+                    if self.can_define_opaque_ty(ctor.expect_def())
+                        && !ty.has_escaping_bound_vars() =>
                 {
-                    let def_span = self.tcx.def_span(def_id);
+                    let def_span = self.tcx.def_span(ctor.expect_def());
                     let span = if span.contains(def_span) { def_span } else { span };
                     let ty_var = self.next_ty_var(span);
                     obligations.extend(
@@ -85,8 +86,8 @@ impl<'tcx> InferCtxt<'tcx> {
     ) -> Result<Vec<Goal<'tcx, ty::Predicate<'tcx>>>, TypeError<'tcx>> {
         debug_assert!(!self.next_trait_solver());
         let process = |a: Ty<'tcx>, b: Ty<'tcx>| match *a.kind() {
-            ty::Alias(ty::Opaque, ty::AliasTy { def_id, args, .. }) if def_id.is_local() => {
-                let def_id = def_id.expect_local();
+            ty::Alias(ty::Opaque, ty::AliasTy { ctor, args, .. }) if ctor.is_local_def() => {
+                let def_id = ctor.expect_def().expect_local();
                 if let ty::TypingMode::Coherence = self.typing_mode() {
                     // See comment on `insert_hidden_type` for why this is sufficient in coherence
                     return Some(self.register_hidden_type(
@@ -134,7 +135,8 @@ impl<'tcx> InferCtxt<'tcx> {
                     return None;
                 }
 
-                if let ty::Alias(ty::Opaque, ty::AliasTy { def_id: b_def_id, .. }) = *b.kind() {
+                if let ty::Alias(ty::Opaque, ty::AliasTy { ctor: b_ctor, .. }) = *b.kind() {
+                    let b_def_id = b_ctor.expect_def();
                     // We could accept this, but there are various ways to handle this situation,
                     // and we don't want to make a decision on it right now. Likely this case is so
                     // super rare anyway, that no one encounters it in practice. It does occur
@@ -316,10 +318,11 @@ impl<'tcx> InferCtxt<'tcx> {
                     // FIXME(inherent_associated_types): Extend this to support `ty::Inherent`, too.
                     ty::Alias(ty::Projection, projection_ty)
                         if !projection_ty.has_escaping_bound_vars()
-                            && !tcx.is_impl_trait_in_trait(projection_ty.def_id)
+                            && !tcx.is_impl_trait_in_trait(projection_ty.ctor.expect_def())
                             && !self.next_trait_solver() =>
                     {
-                        let ty_var = self.next_ty_var(self.tcx.def_span(projection_ty.def_id));
+                        let ty_var =
+                            self.next_ty_var(self.tcx.def_span(projection_ty.ctor.expect_def()));
                         goals.push(Goal::new(
                             self.tcx,
                             param_env,
@@ -334,8 +337,8 @@ impl<'tcx> InferCtxt<'tcx> {
                     }
                     // Replace all other mentions of the same opaque type with the hidden type,
                     // as the bounds must hold on the hidden type after all.
-                    ty::Alias(ty::Opaque, ty::AliasTy { def_id: def_id2, args: args2, .. })
-                        if def_id == def_id2 && args == args2 =>
+                    ty::Alias(ty::Opaque, ty::AliasTy { ctor: ctor2, args: args2, .. })
+                        if def_id == ctor2.expect_def() && args == args2 =>
                     {
                         hidden_ty
                     }

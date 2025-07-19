@@ -278,7 +278,12 @@ impl<'a, 'tcx> ConstraintContext<'a, 'tcx> {
             }
 
             ty::Alias(ty::Free, ref data) => {
-                self.add_constraints_from_args(current, data.def_id, data.args, variance);
+                self.add_constraints_from_args(
+                    current,
+                    data.ctor.expect_def(),
+                    data.args,
+                    variance,
+                );
             }
 
             ty::Dynamic(data, r) => {

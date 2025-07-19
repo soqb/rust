@@ -515,8 +515,8 @@ pub(super) fn explicit_predicates_of<'tcx>(
             if let ty::Alias(ty::Projection, projection) = ty.kind() {
                 projection.args == trait_identity_args
                     // FIXME(return_type_notation): This check should be more robust
-                    && !tcx.is_impl_trait_in_trait(projection.def_id)
-                    && tcx.parent(projection.def_id) == def_id.to_def_id()
+                    && !tcx.is_impl_trait_in_trait(projection.ctor)
+                    && tcx.parent(projection.ctor.expect_def()) == def_id.to_def_id()
             } else {
                 false
             }

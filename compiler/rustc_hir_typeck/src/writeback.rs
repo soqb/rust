@@ -575,7 +575,7 @@ impl<'cx, 'tcx> WritebackCx<'cx, 'tcx> {
             let hidden_type = self.resolve(hidden_type, &hidden_type.span);
             let opaque_type_key = self.resolve(opaque_type_key, &hidden_type.span);
             if let ty::Alias(ty::Opaque, alias_ty) = hidden_type.ty.kind()
-                && alias_ty.def_id == opaque_type_key.def_id.to_def_id()
+                && alias_ty.ctor.expect_def() == opaque_type_key.def_id.to_def_id()
                 && alias_ty.args == opaque_type_key.args
             {
                 continue;
@@ -1054,7 +1054,7 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for HasRecursiveOpaque<'_, 'tcx> {
 
     fn visit_ty(&mut self, t: Ty<'tcx>) -> Self::Result {
         if let ty::Alias(ty::Opaque, alias_ty) = *t.kind()
-            && let Some(def_id) = alias_ty.def_id.as_local()
+            && let Some(def_id) = alias_ty.ctor.expect_def().as_local()
         {
             if self.def_id == def_id {
                 return ControlFlow::Break(());

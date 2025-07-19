@@ -800,7 +800,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
             ty::Foreign(def_id) => self.print_def_path(def_id, &[])?,
             ty::Alias(ty::Projection | ty::Inherent | ty::Free, ref data) => data.print(self)?,
             ty::Placeholder(placeholder) => placeholder.print(self)?,
-            ty::Alias(ty::Opaque, ty::AliasTy { def_id, args, .. }) => {
+            ty::Alias(ty::Opaque, ty::AliasTy { ctor, args, .. }) => {
                 // We use verbose printing in 'NO_QUERIES' mode, to
                 // avoid needing to call `predicates_of`. This should
                 // only affect certain debug messages (e.g. messages printed
@@ -809,6 +809,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                 // [Unless `-Zverbose-internals` is used, e.g. in the output of
                 // `tests/ui/nll/ty-outlives/impl-trait-captures.rs`, for
                 // example.]
+                let def_id = ctor.expect_def();
                 if self.should_print_verbose() {
                     // FIXME(eddyb) print this with `print_def_path`.
                     write!(self, "Opaque({:?}, {})", def_id, args.print_as_list())?;
@@ -820,9 +821,10 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                     DefKind::TyAlias | DefKind::AssocTy => {
                         // NOTE: I know we should check for NO_QUERIES here, but it's alright.
                         // `type_of` on a type alias or assoc type should never cause a cycle.
-                        if let ty::Alias(ty::Opaque, ty::AliasTy { def_id: d, .. }) =
+                        if let ty::Alias(ty::Opaque, ty::AliasTy { ctor: d_ctor, .. }) =
                             *self.tcx().type_of(parent).instantiate_identity().kind()
                         {
+                            let d = d_ctor.expect_def();
                             if d == def_id {
                                 // If the type alias directly starts with the `impl` of the
                                 // opaque type we're printing, then skip the `::{opaque#1}`.
@@ -1312,7 +1314,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
         &mut self,
         alias_ty: ty::AliasTerm<'tcx>,
     ) -> Result<(), PrintError> {
-        let def_key = self.tcx().def_key(alias_ty.def_id);
+        let def_key = self.tcx().def_key(alias_ty.ctor.expect_def());
         self.print_path_with_generic_args(
             |p| {
                 p.print_path_with_simple(
@@ -1334,7 +1336,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                 self.tcx().opt_rpitit_info(def_id)
             && let ty::Alias(_, alias_ty) =
                 self.tcx().fn_sig(fn_def_id).skip_binder().output().skip_binder().kind()
-            && alias_ty.def_id == def_id
+            && alias_ty.ctor.expect_def() == def_id
             && let generics = self.tcx().generics_of(fn_def_id)
             // FIXME(return_type_notation): We only support lifetime params for now.
             && generics.own_params.iter().all(|param| matches!(param.kind, ty::GenericParamDefKind::Lifetime))
@@ -3111,12 +3113,13 @@ define_print! {
         match self.kind(p.tcx()) {
             ty::AliasTermKind::InherentTy | ty::AliasTermKind::InherentConst => p.pretty_print_inherent_projection(*self)?,
             ty::AliasTermKind::ProjectionTy => {
+                let def_id = self.ctor.expect_def();
                 if !(p.should_print_verbose() || with_reduced_queries())
-                    && p.tcx().is_impl_trait_in_trait(self.def_id)
+                    && p.tcx().is_impl_trait_in_trait(def_id)
                 {
-                    p.pretty_print_rpitit(self.def_id, self.args)?;
+                    p.pretty_print_rpitit(def_id, self.args)?;
                 } else {
-                    p.print_def_path(self.def_id, self.args)?;
+                    p.print_def_path(def_id, self.args)?;
                 }
             }
             ty::AliasTermKind::FreeTy
@@ -3124,7 +3127,7 @@ define_print! {
             | ty::AliasTermKind::OpaqueTy
             | ty::AliasTermKind::UnevaluatedConst
             | ty::AliasTermKind::ProjectionConst => {
-                p.print_def_path(self.def_id, self.args)?;
+                p.print_def_path(self.ctor.expect_def(), self.args)?;
             }
         }
     }

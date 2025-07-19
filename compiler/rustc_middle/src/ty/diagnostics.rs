@@ -624,13 +624,14 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for IsSuggestableVisitor<'tcx> {
                 return ControlFlow::Break(());
             }
 
-            Alias(Opaque, AliasTy { def_id, .. }) => {
+            Alias(Opaque, AliasTy { ctor, .. }) => {
+                let def_id = ctor.expect_def();
                 let parent = self.tcx.parent(def_id);
                 let parent_ty = self.tcx.type_of(parent).instantiate_identity();
                 if let DefKind::TyAlias | DefKind::AssocTy = self.tcx.def_kind(parent)
-                    && let Alias(Opaque, AliasTy { def_id: parent_opaque_def_id, .. }) =
+                    && let Alias(Opaque, AliasTy { ctor: parent_opaque_ctor, .. }) =
                         *parent_ty.kind()
-                    && parent_opaque_def_id == def_id
+                    && parent_opaque_ctor.expect_def() == def_id
                 {
                     // Okay
                 } else {
@@ -638,8 +639,8 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for IsSuggestableVisitor<'tcx> {
                 }
             }
 
-            Alias(Projection, AliasTy { def_id, .. })
-                if self.tcx.def_kind(def_id) != DefKind::AssocTy =>
+            Alias(Projection, AliasTy { ctor, .. })
+                if self.tcx.def_kind(ctor.expect_def()) != DefKind::AssocTy =>
             {
                 return ControlFlow::Break(());
             }
@@ -713,14 +714,15 @@ impl<'tcx> FallibleTypeFolder<TyCtxt<'tcx>> for MakeSuggestableFolder<'tcx> {
                 }
             }
 
-            Alias(Opaque, AliasTy { def_id, .. }) => {
+            Alias(Opaque, AliasTy { ctor, .. }) => {
+                let def_id = ctor.expect_def();
                 let parent = self.tcx.parent(def_id);
                 let parent_ty = self.tcx.type_of(parent).instantiate_identity();
                 if let hir::def::DefKind::TyAlias | hir::def::DefKind::AssocTy =
                     self.tcx.def_kind(parent)
-                    && let Alias(Opaque, AliasTy { def_id: parent_opaque_def_id, .. }) =
+                    && let Alias(Opaque, AliasTy { ctor: parent_opaque_ctor, .. }) =
                         *parent_ty.kind()
-                    && parent_opaque_def_id == def_id
+                    && parent_opaque_ctor.expect_def() == def_id
                 {
                     t
                 } else {

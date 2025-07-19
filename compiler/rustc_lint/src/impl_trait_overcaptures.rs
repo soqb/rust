@@ -244,15 +244,15 @@ where
         }
 
         if let ty::Alias(ty::Projection, opaque_ty) = *t.kind()
-            && self.tcx.is_impl_trait_in_trait(opaque_ty.def_id)
+            && self.tcx.is_impl_trait_in_trait(opaque_ty.ctor)
         {
             // visit the opaque of the RPITIT
             self.tcx
-                .type_of(opaque_ty.def_id)
+                .type_of_alias(opaque_ty.ctor)
                 .instantiate(self.tcx, opaque_ty.args)
                 .visit_with(self)
         } else if let ty::Alias(ty::Opaque, opaque_ty) = *t.kind()
-            && let Some(opaque_def_id) = opaque_ty.def_id.as_local()
+            && let Some(opaque_def_id) = opaque_ty.ctor.expect_def().as_local()
             // Don't recurse infinitely on an opaque
             && self.seen.insert(opaque_def_id)
             // If it's owned by this function
@@ -417,7 +417,7 @@ where
             // is for `impl for<'a> Bound<Out = impl Other>`, since `impl Other` will begin
             // to capture `'a` in e2024 (even though late-bound vars in opaques are not allowed).
             for clause in
-                self.tcx.item_bounds(opaque_ty.def_id).iter_instantiated(self.tcx, opaque_ty.args)
+                opaque_ty.ctor.bounds(self.tcx).iter_instantiated(self.tcx, opaque_ty.args)
             {
                 clause.visit_with(self)
             }

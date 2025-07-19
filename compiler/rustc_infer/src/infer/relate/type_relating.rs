@@ -93,7 +93,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for TypeRelating<'_, 'tcx> {
         } else {
             let tcx = self.cx();
             let opt_variances = tcx.variances_of(item_def_id);
-            relate_args_with_variances(self, item_def_id, opt_variances, a_arg, b_arg, false)
+            relate_args_with_variances(self, item_def_id.into(), opt_variances, a_arg, b_arg, false)
         }
     }
 
@@ -182,15 +182,15 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for TypeRelating<'_, 'tcx> {
             }
 
             (
-                &ty::Alias(ty::Opaque, ty::AliasTy { def_id: a_def_id, .. }),
-                &ty::Alias(ty::Opaque, ty::AliasTy { def_id: b_def_id, .. }),
-            ) if a_def_id == b_def_id => {
+                &ty::Alias(ty::Opaque, ty::AliasTy { ctor: a_ctor, .. }),
+                &ty::Alias(ty::Opaque, ty::AliasTy { ctor: b_ctor, .. }),
+            ) if a_ctor == b_ctor => {
                 super_combine_tys(infcx, self, a, b)?;
             }
 
-            (&ty::Alias(ty::Opaque, ty::AliasTy { def_id, .. }), _)
-            | (_, &ty::Alias(ty::Opaque, ty::AliasTy { def_id, .. }))
-                if self.define_opaque_types == DefineOpaqueTypes::Yes && def_id.is_local() =>
+            (&ty::Alias(ty::Opaque, ty::AliasTy { ctor, .. }), _)
+            | (_, &ty::Alias(ty::Opaque, ty::AliasTy { ctor, .. }))
+                if self.define_opaque_types == DefineOpaqueTypes::Yes && ctor.is_local_def() =>
             {
                 self.register_goals(infcx.handle_opaque_type(
                     a,

@@ -375,10 +375,10 @@ fn bounds_from_generic_predicates<'tcx>(
                     let mut projections_str = vec![];
                     for projection in &projections {
                         let p = projection.skip_binder();
-                        if bound == tcx.parent(p.projection_term.def_id)
+                        if bound == tcx.parent(p.def_id())
                             && p.projection_term.self_ty() == ty
                         {
-                            let name = tcx.item_name(p.projection_term.def_id);
+                            let name = tcx.item_name(p.def_id());
                             projections_str.push(format!("{} = {}", name, p.term));
                         }
                     }
@@ -492,8 +492,9 @@ fn fn_sig_suggestion<'tcx>(
 
     let asyncness = if tcx.asyncness(assoc.def_id).is_async() {
         output = if let ty::Alias(_, alias_ty) = *output.kind()
-            && let Some(output) = tcx
-                .explicit_item_self_bounds(alias_ty.def_id)
+            && let Some(output) = alias_ty
+                .ctor
+                .explicit_self_bounds(tcx)
                 .iter_instantiated_copied(tcx, alias_ty.args)
                 .find_map(|(bound, _)| {
                     bound.as_projection_clause()?.no_bound_vars()?.term.as_type()
