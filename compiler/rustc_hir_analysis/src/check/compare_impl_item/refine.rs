@@ -116,9 +116,7 @@ pub(crate) fn check_refining_return_position_impl_trait_in_trait<'tcx>(
             return;
         }
 
-        trait_bounds.extend(
-            trait_projection.ctor.bounds(tcx).iter_instantiated(tcx, trait_projection.args),
-        );
+        trait_bounds.extend(trait_projection.bounds_instantiated(tcx));
         impl_bounds.extend(elaborate(
             tcx,
             impl_opaque.ctor.explicit_bounds(tcx).iter_instantiated_copied(tcx, impl_opaque.args),

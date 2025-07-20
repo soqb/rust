@@ -272,11 +272,7 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for ImplTraitInTraitFinder<'_, 'tcx> {
             // binder depth, and if we were to walk `shifted_alias_ty` instead, we'd
             // have to reset `self.depth` back to `ty::INNERMOST` or something. It's
             // easier to just do this.
-            for bound in unshifted_alias_ty
-                .ctor
-                .bounds(self.tcx)
-                .iter_instantiated(self.tcx, unshifted_alias_ty.args)
-            {
+            for bound in unshifted_alias_ty.bounds_instantiated(self.tcx) {
                 bound.visit_with(self);
             }
         }

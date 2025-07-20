@@ -416,9 +416,7 @@ where
             // in this lint as well. Interestingly, one place that I expect this lint to fire
             // is for `impl for<'a> Bound<Out = impl Other>`, since `impl Other` will begin
             // to capture `'a` in e2024 (even though late-bound vars in opaques are not allowed).
-            for clause in
-                opaque_ty.ctor.bounds(self.tcx).iter_instantiated(self.tcx, opaque_ty.args)
-            {
+            for clause in opaque_ty.bounds_instantiated(self.tcx) {
                 clause.visit_with(self)
             }
         }

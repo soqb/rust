@@ -728,11 +728,7 @@ where
 
         match consider_self_bounds {
             AliasBoundKind::SelfBounds => {
-                for assumption in self
-                    .cx()
-                    .alias_self_bounds(alias_ty.ctor)
-                    .iter_instantiated(self.cx(), alias_ty.args)
-                {
+                for assumption in alias_ty.self_bounds_instantiated(self.cx()) {
                     candidates.extend(G::probe_and_consider_implied_clause(
                         self,
                         CandidateSource::AliasBound,
@@ -743,11 +739,7 @@ where
                 }
             }
             AliasBoundKind::NonSelfBounds => {
-                for assumption in self
-                    .cx()
-                    .alias_non_self_bounds(alias_ty.ctor)
-                    .iter_instantiated(self.cx(), alias_ty.args)
-                {
+                for assumption in alias_ty.non_self_bounds_instantiated(self.cx()) {
                     candidates.extend(G::probe_and_consider_implied_clause(
                         self,
                         CandidateSource::AliasBound,

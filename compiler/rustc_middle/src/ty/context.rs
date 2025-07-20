@@ -418,30 +418,6 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
         self.item_non_self_bounds(def_id).map_bound(IntoIterator::into_iter)
     }
 
-    fn alias_bounds(
-        self,
-        ctor: ty::AliasCtor<'tcx>,
-    ) -> ty::EarlyBinder<'tcx, impl IntoIterator<Item = ty::Clause<'tcx>>> {
-        let ty::AliasCtor::Def(def_id) = ctor;
-        self.item_bounds(def_id).map_bound(IntoIterator::into_iter)
-    }
-
-    fn alias_self_bounds(
-        self,
-        ctor: ty::AliasCtor<'tcx>,
-    ) -> ty::EarlyBinder<'tcx, impl IntoIterator<Item = ty::Clause<'tcx>>> {
-        let ty::AliasCtor::Def(def_id) = ctor;
-        self.item_self_bounds(def_id).map_bound(IntoIterator::into_iter)
-    }
-
-    fn alias_non_self_bounds(
-        self,
-        ctor: ty::AliasCtor<'tcx>,
-    ) -> ty::EarlyBinder<'tcx, impl IntoIterator<Item = ty::Clause<'tcx>>> {
-        let ty::AliasCtor::Def(def_id) = ctor;
-        self.item_non_self_bounds(def_id).map_bound(IntoIterator::into_iter)
-    }
-
     fn predicates_of(
         self,
         def_id: DefId,

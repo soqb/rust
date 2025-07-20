@@ -231,9 +231,9 @@ pub trait AliasCtor<I: Interner<AliasCtor = Self>>:
 
     fn span(self, cx: I) -> I::Span;
 
-    fn bounds(self, cx: I) -> ty::EarlyBinder<I, I::Clauses>;
-    fn self_bounds(self, cx: I) -> ty::EarlyBinder<I, I::Clauses>;
-    fn non_self_bounds(self, cx: I) -> ty::EarlyBinder<I, I::Clauses>;
+    fn bounds(self, cx: I) -> ty::EarlyBinder<I, impl Iterator<Item = I::Clause>>;
+    fn self_bounds(self, cx: I) -> ty::EarlyBinder<I, impl Iterator<Item = I::Clause>>;
+    fn non_self_bounds(self, cx: I) -> ty::EarlyBinder<I, impl Iterator<Item = I::Clause>>;
 }
 
 pub trait Region<I: Interner<Region = Self>>:

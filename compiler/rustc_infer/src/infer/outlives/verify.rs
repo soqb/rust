@@ -3,7 +3,7 @@ use std::assert_matches::assert_matches;
 use rustc_middle::ty::outlives::{Component, compute_alias_components_recursive};
 use rustc_middle::ty::{self, OutlivesPredicate, Ty, TyCtxt};
 use smallvec::smallvec;
-use tracing::{debug, instrument, trace};
+use tracing::{debug, instrument};
 
 use crate::infer::outlives::env::RegionBoundPairs;
 use crate::infer::region_constraints::VerifyIfEq;
@@ -281,10 +281,8 @@ impl<'cx, 'tcx> VerifyBoundCx<'cx, 'tcx> {
         alias_ty: ty::AliasTy<'tcx>,
     ) -> impl Iterator<Item = ty::Region<'tcx>> {
         let tcx = self.tcx;
-        let bounds = alias_ty.ctor.self_bounds(tcx);
-        trace!("{:#?}", bounds.skip_binder());
-        bounds
-            .iter_instantiated(tcx, alias_ty.args)
+        alias_ty
+            .self_bounds_instantiated(tcx)
             .filter_map(|p| p.as_type_outlives_clause())
             .filter_map(|p| p.no_bound_vars())
             .map(|OutlivesPredicate(_, r)| r)

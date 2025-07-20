@@ -282,21 +282,6 @@ pub trait Interner:
         def_id: Self::DefId,
     ) -> ty::EarlyBinder<Self, impl IntoIterator<Item = Self::Clause>>;
 
-    fn alias_bounds(
-        self,
-        ctor: Self::AliasCtor,
-    ) -> ty::EarlyBinder<Self, impl IntoIterator<Item = Self::Clause>>;
-
-    fn alias_self_bounds(
-        self,
-        ctor: Self::AliasCtor,
-    ) -> ty::EarlyBinder<Self, impl IntoIterator<Item = Self::Clause>>;
-
-    fn alias_non_self_bounds(
-        self,
-        ctor: Self::AliasCtor,
-    ) -> ty::EarlyBinder<Self, impl IntoIterator<Item = Self::Clause>>;
-
     fn predicates_of(
         self,
         def_id: Self::DefId,
