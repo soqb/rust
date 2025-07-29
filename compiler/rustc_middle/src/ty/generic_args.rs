@@ -429,11 +429,22 @@ impl<'tcx> GenericArgs<'tcx> {
     /// The closures get to observe the [`GenericArgs`] as they're
     /// being built, which can be used to correctly
     /// replace defaults of generic parameters.
-    pub fn for_item<F>(tcx: TyCtxt<'tcx>, def_id: DefId, mut mk_kind: F) -> GenericArgsRef<'tcx>
+    pub fn for_item<F>(tcx: TyCtxt<'tcx>, def_id: DefId, mk_kind: F) -> GenericArgsRef<'tcx>
     where
         F: FnMut(&ty::GenericParamDef, &[GenericArg<'tcx>]) -> GenericArg<'tcx>,
     {
-        let defs = tcx.generics_of(def_id);
+        Self::for_alias(tcx, def_id.into(), mk_kind)
+    }
+
+    pub fn for_alias<F>(
+        tcx: TyCtxt<'tcx>,
+        ctor: ty::AliasCtor<'tcx>,
+        mut mk_kind: F,
+    ) -> GenericArgsRef<'tcx>
+    where
+        F: FnMut(&ty::GenericParamDef, &[GenericArg<'tcx>]) -> GenericArg<'tcx>,
+    {
+        let defs = ctor.generics(tcx);
         let count = defs.count();
         let mut args = SmallVec::with_capacity(count);
         Self::fill_item(&mut args, tcx, defs, &mut mk_kind);

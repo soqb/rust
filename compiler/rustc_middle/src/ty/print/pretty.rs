@@ -2161,6 +2161,11 @@ impl<'t> TyCtxt<'t> {
     pub fn def_path_str(self, def_id: impl IntoQueryParam<DefId>) -> String {
         self.def_path_str_with_args(def_id, &[])
     }
+    pub fn alias_ctor_str(self, alias: ty::AliasCtor<'t>) -> String {
+        match alias {
+            ty::AliasCtor::Def(def_id) => self.def_path_str(def_id),
+        }
+    }
 
     /// For this one we determine the appropriate namespace for the `def_id`.
     pub fn def_path_str_with_args(

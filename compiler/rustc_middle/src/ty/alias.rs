@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use rustc_hir::def_id::DefId;
-use rustc_macros::{HashStable, TyDecodable, TyEncodable};
+use rustc_macros::{HashStable, TyDecodable, TyEncodable, extension};
 use rustc_span::Span;
 
 use crate::ty::{self, TyCtxt};
@@ -34,12 +34,7 @@ impl<'tcx> AliasCtor<'tcx> {
     }
 
     pub fn is_local_def(self) -> bool {
-        matches!(self, AliasCtor::Def(_))
-    }
-
-    pub fn temp_unwrap_def(self) -> DefId {
-        let AliasCtor::Def(def_id) = self;
-        def_id
+        matches!(self, AliasCtor::Def(def_id) if def_id.is_local())
     }
 
     pub fn span(self, cx: TyCtxt<'tcx>) -> Span {
@@ -76,6 +71,28 @@ impl<'tcx> AliasCtor<'tcx> {
             AliasCtor::Def(def_id) => {
                 cx.item_non_self_bounds(def_id).map_bound(IntoIterator::into_iter)
             }
+        }
+    }
+
+    pub fn const_conditions(
+        self,
+        cx: TyCtxt<'tcx>,
+    ) -> ty::EarlyBinder<'tcx, impl Iterator<Item = ty::Binder<'tcx, ty::TraitRef<'tcx>>>> {
+        match self {
+            AliasCtor::Def(def_id) => ty::EarlyBinder::bind(
+                cx.const_conditions(def_id).instantiate_identity(cx).into_iter().map(|(c, _)| c),
+            ),
+        }
+    }
+
+    pub fn explicit_implied_const_bounds(
+        self,
+        cx: TyCtxt<'tcx>,
+    ) -> ty::EarlyBinder<'tcx, impl Iterator<Item = ty::Binder<'tcx, ty::TraitRef<'tcx>>>> {
+        match self {
+            AliasCtor::Def(def_id) => ty::EarlyBinder::bind(
+                cx.explicit_implied_const_bounds(def_id).iter_identity_copied().map(|(c, _)| c),
+            ),
         }
     }
 
@@ -121,10 +138,6 @@ impl<'tcx> rustc_type_ir::inherent::AliasCtor<TyCtxt<'tcx>> for AliasCtor<'tcx> 
         self.expect_def()
     }
 
-    fn temp_unwrap_def(self) -> DefId {
-        self.temp_unwrap_def()
-    }
-
     fn span(self, cx: TyCtxt<'tcx>) -> Span {
         self.span(cx)
     }
@@ -149,10 +162,46 @@ impl<'tcx> rustc_type_ir::inherent::AliasCtor<TyCtxt<'tcx>> for AliasCtor<'tcx> 
     ) -> ty::EarlyBinder<'tcx, impl Iterator<Item = ty::Clause<'tcx>>> {
         self.non_self_bounds(cx)
     }
+
+    fn def(self) -> Option<DefId> {
+        self.def()
+    }
+
+    fn const_conditions(
+        self,
+        cx: TyCtxt<'tcx>,
+    ) -> ty::EarlyBinder<'tcx, impl Iterator<Item = ty::Binder<'tcx, ty::TraitRef<'tcx>>>> {
+        self.const_conditions(cx)
+    }
+
+    fn explicit_implied_const_bounds(
+        self,
+        cx: TyCtxt<'tcx>,
+    ) -> ty::EarlyBinder<'tcx, impl Iterator<Item = ty::Binder<'tcx, ty::TraitRef<'tcx>>>> {
+        self.explicit_implied_const_bounds(cx)
+    }
 }
 
 impl<'tcx> From<DefId> for AliasCtor<'tcx> {
     fn from(def_id: DefId) -> AliasCtor<'tcx> {
         AliasCtor::Def(def_id)
+    }
+}
+
+#[extension(pub trait AliasTyInstExt<'tcx>)]
+impl<'tcx> ty::AliasTy<'tcx> {
+    fn predicates_instantiated(
+        self,
+        cx: TyCtxt<'tcx>,
+    ) -> impl Iterator<Item = (ty::Clause<'tcx>, Span)> + DoubleEndedIterator + ExactSizeIterator
+    {
+        self.ctor.predicates(cx).instantiate_own(cx, self.args)
+    }
+
+    fn args_with_variances(
+        self,
+        cx: TyCtxt<'tcx>,
+    ) -> impl Iterator<Item = (ty::GenericArg<'tcx>, ty::Variance)> {
+        self.args.iter().zip(self.ctor.variances(cx).iter().copied())
     }
 }

@@ -67,7 +67,7 @@ use tracing::{debug, instrument, trace};
 pub use vtable::*;
 use {rustc_ast as ast, rustc_hir as hir};
 
-pub use self::alias::AliasCtor;
+pub use self::alias::{AliasCtor, AliasTyInstExt};
 pub use self::closure::{
     BorrowKind, CAPTURE_STRUCT_LOCAL, CaptureInfo, CapturedPlace, ClosureTypeInfo,
     MinCaptureInformationMap, MinCaptureList, RootVariableMinCaptureList, UpvarCapture, UpvarId,
@@ -1603,7 +1603,7 @@ impl<'tcx> TyCtxt<'tcx> {
         self,
         ctor: impl Into<ty::AliasCtor<'tcx>>,
     ) -> Option<ImplTraitInTraitData> {
-        let def_id = ctor.into().temp_unwrap_def();
+        let def_id = ctor.into().def()?;
         if let DefKind::AssocTy = self.def_kind(def_id)
             && let AssocKind::Type { data: AssocTypeData::Rpitit(rpitit_info) } =
                 self.associated_item(def_id).kind

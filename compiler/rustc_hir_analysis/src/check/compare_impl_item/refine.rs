@@ -7,7 +7,7 @@ use rustc_lint_defs::builtin::{REFINING_IMPL_TRAIT_INTERNAL, REFINING_IMPL_TRAIT
 use rustc_middle::span_bug;
 use rustc_middle::traits::ObligationCause;
 use rustc_middle::ty::{
-    self, Ty, TyCtxt, TypeFoldable, TypeFolder, TypeSuperVisitable, TypeVisitable,
+    self, AliasTyInstExt, Ty, TyCtxt, TypeFoldable, TypeFolder, TypeSuperVisitable, TypeVisitable,
     TypeVisitableExt, TypeVisitor, TypingMode,
 };
 use rustc_span::Span;
@@ -217,19 +217,15 @@ pub(crate) fn check_refining_return_position_impl_trait_in_trait<'tcx>(
     // promising stronger outlives guarantees if we capture *fewer* regions.
     for (trait_projection, impl_opaque) in pairs {
         let impl_opaque_def_id = impl_opaque.ctor.expect_def();
-        let impl_variances = impl_opaque.ctor.variances(tcx);
         let impl_captures: FxIndexSet<_> = impl_opaque
-            .args
-            .iter()
-            .zip_eq(impl_variances)
-            .filter(|(_, v)| **v == ty::Invariant)
+            .args_with_variances(tcx)
+            .filter(|(_, v)| *v == ty::Invariant)
             .map(|(arg, _)| arg)
             .collect();
 
-        let trait_variances = trait_projection.ctor.variances(tcx);
         let mut trait_captures = FxIndexSet::default();
-        for (arg, variance) in trait_projection.args.iter().zip_eq(trait_variances) {
-            if *variance != ty::Invariant {
+        for (arg, variance) in trait_projection.args_with_variances(tcx) {
+            if variance != ty::Invariant {
                 continue;
             }
             arg.visit_with(&mut CollectParams { params: &mut trait_captures });

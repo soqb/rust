@@ -238,9 +238,6 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
         self.opt_alias_variances(kind, ctor)
     }
 
-    fn type_of_alias(self, ctor: ty::AliasCtor<'tcx>) -> ty::EarlyBinder<'tcx, Ty<'tcx>> {
-        self.type_of_alias(ctor)
-    }
     fn type_of(self, def_id: DefId) -> ty::EarlyBinder<'tcx, Ty<'tcx>> {
         self.type_of(def_id)
     }
@@ -2869,12 +2866,6 @@ impl<'tcx> TyCtxt<'tcx> {
                     && trait_predicate.polarity == PredicatePolarity::Positive
             },
         )
-    }
-
-    pub fn type_of_alias(self, ctor: ty::AliasCtor<'tcx>) -> ty::EarlyBinder<'tcx, Ty<'tcx>> {
-        match ctor {
-            ty::AliasCtor::Def(def_id) => self.type_of(def_id),
-        }
     }
 
     /// Given a closure signature, returns an equivalent fn signature. Detuples

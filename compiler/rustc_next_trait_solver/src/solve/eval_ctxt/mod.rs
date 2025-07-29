@@ -1098,15 +1098,15 @@ where
     }
 
     pub(super) fn fresh_args_for_item(&mut self, def_id: I::DefId) -> I::GenericArgs {
-        let args = self.delegate.fresh_args_for_item(def_id);
+        self.fresh_args_for_alias(def_id.into())
+    }
+
+    pub(super) fn fresh_args_for_alias(&mut self, ctor: I::AliasCtor) -> I::GenericArgs {
+        let args = self.delegate.fresh_args_for_alias(ctor);
         for arg in args.iter() {
             self.inspect.add_var_value(arg);
         }
         args
-    }
-
-    pub(super) fn fresh_args_for_alias(&mut self, ctor: I::AliasCtor) -> I::GenericArgs {
-        self.fresh_args_for_item(ctor.temp_unwrap_def())
     }
 
     pub(super) fn register_ty_outlives(&self, ty: I::Ty, lt: I::Region) {

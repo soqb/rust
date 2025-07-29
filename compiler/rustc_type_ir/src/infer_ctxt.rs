@@ -181,9 +181,9 @@ pub trait InferCtxtLike: Sized {
     fn next_region_infer(&self) -> <Self::Interner as Interner>::Region;
     fn next_ty_infer(&self) -> <Self::Interner as Interner>::Ty;
     fn next_const_infer(&self) -> <Self::Interner as Interner>::Const;
-    fn fresh_args_for_item(
+    fn fresh_args_for_alias(
         &self,
-        def_id: <Self::Interner as Interner>::DefId,
+        ctor: <Self::Interner as Interner>::AliasCtor,
     ) -> <Self::Interner as Interner>::GenericArgs;
 
     fn instantiate_binder_with_infer<T: TypeFoldable<Self::Interner> + Copy>(

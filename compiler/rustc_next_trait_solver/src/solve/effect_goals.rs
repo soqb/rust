@@ -88,11 +88,10 @@ where
             return vec![];
         }
 
-        let def_id = alias_ty.ctor.temp_unwrap_def();
         for clause in elaborate::elaborate(
             cx,
-            cx.explicit_implied_const_bounds(def_id)
-                .iter_instantiated(cx, alias_ty.args)
+            alias_ty
+                .explicit_implied_const_bounds_instantiated(cx)
                 .map(|trait_ref| trait_ref.to_host_effect_clause(cx, goal.predicate.constness)),
         ) {
             candidates.extend(Self::probe_and_match_goal_against_assumption(
@@ -104,14 +103,12 @@ where
                     // Const conditions must hold for the implied const bound to hold.
                     ecx.add_goals(
                         GoalSource::AliasBoundConstCondition,
-                        cx.const_conditions(def_id).iter_instantiated(cx, alias_ty.args).map(
-                            |trait_ref| {
-                                goal.with(
-                                    cx,
-                                    trait_ref.to_host_effect_clause(cx, goal.predicate.constness),
-                                )
-                            },
-                        ),
+                        alias_ty.const_conditions_instantiated(cx).map(|trait_ref| {
+                            goal.with(
+                                cx,
+                                trait_ref.to_host_effect_clause(cx, goal.predicate.constness),
+                            )
+                        }),
                     );
                     ecx.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
                 },

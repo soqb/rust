@@ -182,7 +182,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                 (ctor.expect_def(), args)
             }
             ty::Alias(_, ty::AliasTy { ctor, args, .. }) => {
-                let def_id = ctor.temp_unwrap_def();
+                let def_id = ctor.def()?;
                 if self.tcx.is_impl_trait_in_trait(def_id) {
                     (def_id, args)
                 } else {

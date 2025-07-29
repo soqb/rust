@@ -770,8 +770,9 @@ impl<'tcx> TyCtxt<'tcx> {
     }
 
     pub fn alias_descr(self, ctor: ty::AliasCtor<'tcx>) -> &'static str {
-        let def_id = ctor.temp_unwrap_def();
-        self.def_descr(def_id)
+        match ctor {
+            ty::AliasCtor::Def(def_id) => self.def_descr(def_id),
+        }
     }
 
     /// Get an English description for the item's kind.
@@ -1064,7 +1065,10 @@ impl<'tcx> TypeFolder<TyCtxt<'tcx>> for FreeAliasTypeExpander<'tcx> {
 
         self.depth += 1;
         let ty = ensure_sufficient_stack(|| {
-            self.tcx.type_of_alias(alias.ctor).instantiate(self.tcx, alias.args).fold_with(self)
+            self.tcx
+                .type_of(alias.ctor.expect_def())
+                .instantiate(self.tcx, alias.args)
+                .fold_with(self)
         });
         self.depth -= 1;
         ty

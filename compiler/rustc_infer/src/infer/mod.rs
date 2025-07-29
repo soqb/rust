@@ -934,7 +934,15 @@ impl<'tcx> InferCtxt<'tcx> {
     /// Given a set of generics defined on a type or impl, returns the generic parameters mapping
     /// each type/region parameter to a fresh inference variable.
     pub fn fresh_args_for_item(&self, span: Span, def_id: DefId) -> GenericArgsRef<'tcx> {
-        GenericArgs::for_item(self.tcx, def_id, |param, _| self.var_for_def(span, param))
+        self.fresh_args_for_alias(span, def_id.into())
+    }
+
+    pub fn fresh_args_for_alias(
+        &self,
+        span: Span,
+        alias: ty::AliasCtor<'tcx>,
+    ) -> ty::GenericArgsRef<'tcx> {
+        GenericArgs::for_alias(self.tcx, alias, |param, _| self.var_for_def(span, param))
     }
 
     /// Returns `true` if errors have been reported since this infcx was

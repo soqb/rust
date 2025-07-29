@@ -1,5 +1,4 @@
 //! Definition of `InferCtxtLike` from the librarified type layer.
-use rustc_hir::def_id::DefId;
 use rustc_middle::traits::ObligationCause;
 use rustc_middle::ty::relate::RelateResult;
 use rustc_middle::ty::relate::combine::PredicateEmittingRelation;
@@ -156,8 +155,8 @@ impl<'tcx> rustc_type_ir::InferCtxtLike for InferCtxt<'tcx> {
         self.next_const_var(DUMMY_SP)
     }
 
-    fn fresh_args_for_item(&self, def_id: DefId) -> ty::GenericArgsRef<'tcx> {
-        self.fresh_args_for_item(DUMMY_SP, def_id)
+    fn fresh_args_for_alias(&self, alias: ty::AliasCtor<'tcx>) -> ty::GenericArgsRef<'tcx> {
+        self.fresh_args_for_alias(DUMMY_SP, alias)
     }
 
     fn instantiate_binder_with_infer<T: TypeFoldable<TyCtxt<'tcx>> + Copy>(

@@ -14,7 +14,9 @@ use rustc_hir::lang_items::LangItem;
 use rustc_infer::infer::{BoundRegionConversionTime, DefineOpaqueTypes, InferOk};
 use rustc_infer::traits::ObligationCauseCode;
 use rustc_middle::traits::{BuiltinImplSource, SignatureMismatchData};
-use rustc_middle::ty::{self, GenericArgsRef, Region, SizedTraitKind, Ty, TyCtxt, Upcast};
+use rustc_middle::ty::{
+    self, AliasTyInstExt, GenericArgsRef, Region, SizedTraitKind, Ty, TyCtxt, Upcast,
+};
 use rustc_middle::{bug, span_bug};
 use rustc_span::def_id::DefId;
 use thin_vec::thin_vec;
@@ -196,8 +198,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
 
         // FIXME(compiler-errors): I don't think this is needed.
         if let ty::Alias(ty::Projection, alias_ty) = placeholder_self_ty.kind() {
-            let predicates = alias_ty.ctor.predicates(tcx).instantiate_own(tcx, alias_ty.args);
-            for (predicate, _) in predicates {
+            for (predicate, _) in alias_ty.predicates_instantiated(tcx) {
                 let normalized = normalize_with_depth_to(
                     self,
                     obligation.param_env,

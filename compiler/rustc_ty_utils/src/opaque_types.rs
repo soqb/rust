@@ -227,7 +227,7 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for OpaqueTypeCollector<'tcx> {
                     return;
                 }
                 self.tcx
-                    .type_of_alias(alias_ty.ctor)
+                    .type_of(alias_ty.ctor.expect_def())
                     .instantiate(self.tcx, alias_ty.args)
                     .visit_with(self);
             }

@@ -497,6 +497,18 @@ impl<I: Interner> AliasTy<I> {
     pub fn non_self_bounds_instantiated(self, interner: I) -> impl Iterator<Item = I::Clause> {
         self.ctor.non_self_bounds(interner).iter_instantiated(interner, self.args)
     }
+    pub fn const_conditions_instantiated(
+        self,
+        interner: I,
+    ) -> impl Iterator<Item = ty::Binder<I, ty::TraitRef<I>>> {
+        self.ctor.const_conditions(interner).iter_instantiated(interner, self.args)
+    }
+    pub fn explicit_implied_const_bounds_instantiated(
+        self,
+        interner: I,
+    ) -> impl Iterator<Item = ty::Binder<I, ty::TraitRef<I>>> {
+        self.ctor.explicit_implied_const_bounds(interner).iter_instantiated(interner, self.args)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

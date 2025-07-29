@@ -570,7 +570,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
 
         let mut output_ty = self.regioncx.universal_regions().unnormalized_output_ty;
         if let ty::Alias(ty::Opaque, ty::AliasTy { ctor, .. }) = *output_ty.kind() {
-            output_ty = self.infcx.tcx.type_of_alias(ctor).instantiate_identity()
+            output_ty = self.infcx.tcx.type_of(ctor.expect_def()).instantiate_identity()
         };
 
         debug!("report_fnmut_error: output_ty={:?}", output_ty);

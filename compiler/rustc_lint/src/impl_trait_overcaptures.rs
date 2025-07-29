@@ -248,7 +248,7 @@ where
         {
             // visit the opaque of the RPITIT
             self.tcx
-                .type_of_alias(opaque_ty.ctor)
+                .type_of(opaque_ty.ctor.expect_def())
                 .instantiate(self.tcx, opaque_ty.args)
                 .visit_with(self)
         } else if let ty::Alias(ty::Opaque, opaque_ty) = *t.kind()

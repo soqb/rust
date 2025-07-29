@@ -146,12 +146,13 @@ pub fn relate_args_with_variances<I: Interner, R: TypeRelation<I>>(
 ) -> RelateResult<I, I::GenericArgs> {
     let cx = relation.cx();
 
+    let fetch_ty_for_diag = fetch_ty_for_diag && ctor.def().is_some();
     let mut cached_ty = None;
     let params = iter::zip(a_arg.iter(), b_arg.iter()).enumerate().map(|(i, (a, b))| {
         let variance = variances.get(i).unwrap();
         let variance_info = if variance == ty::Invariant && fetch_ty_for_diag {
-            let ty =
-                *cached_ty.get_or_insert_with(|| cx.type_of_alias(ctor).instantiate(cx, a_arg));
+            let ty = *cached_ty
+                .get_or_insert_with(|| cx.type_of(ctor.expect_def()).instantiate(cx, a_arg));
             VarianceDiagInfo::Invariant { ty, param_index: i.try_into().unwrap() }
         } else {
             VarianceDiagInfo::default()

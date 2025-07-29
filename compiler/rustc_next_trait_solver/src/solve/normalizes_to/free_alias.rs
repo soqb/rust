@@ -31,7 +31,7 @@ where
         );
 
         let actual = if free_alias.kind(cx).is_type() {
-            cx.type_of_alias(free_alias.ctor).instantiate(cx, free_alias.args)
+            cx.type_of(free_alias.ctor.expect_def()).instantiate(cx, free_alias.args)
         } else {
             // FIXME(mgca): once const items are actual aliases defined as equal to type system consts
             // this should instead return that.

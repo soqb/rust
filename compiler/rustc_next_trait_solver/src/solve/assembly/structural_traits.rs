@@ -99,7 +99,7 @@ where
             // We can resolve the `impl Trait` to its concrete type,
             // which enforces a DAG between the functions requiring
             // the auto trait bounds in question.
-            Ok(ty::Binder::dummy(vec![cx.type_of_alias(ctor).instantiate(cx, args)]))
+            Ok(ty::Binder::dummy(vec![cx.type_of(ctor.expect_def()).instantiate(cx, args)]))
         }
     }
 }
@@ -951,7 +951,7 @@ where
             return Ok(None);
         }
 
-        let def_id = alias_term.ctor.temp_unwrap_def();
+        let def_id = alias_term.ctor.expect_def();
         let Some(replacements) = self.mapping.get(&def_id) else {
             return Ok(None);
         };

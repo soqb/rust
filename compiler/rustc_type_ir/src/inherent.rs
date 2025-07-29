@@ -226,14 +226,20 @@ pub trait AliasCtor<I: Interner<AliasCtor = Self>>:
     Copy + Debug + Hash + Eq + From<I::DefId> + TypeFoldable<I> + TypeVisitable<I>
 {
     fn expect_def(self) -> I::DefId;
-
-    fn temp_unwrap_def(self) -> I::DefId;
-
+    fn def(self) -> Option<I::DefId>;
     fn span(self, cx: I) -> I::Span;
 
     fn bounds(self, cx: I) -> ty::EarlyBinder<I, impl Iterator<Item = I::Clause>>;
     fn self_bounds(self, cx: I) -> ty::EarlyBinder<I, impl Iterator<Item = I::Clause>>;
     fn non_self_bounds(self, cx: I) -> ty::EarlyBinder<I, impl Iterator<Item = I::Clause>>;
+    fn const_conditions(
+        self,
+        cx: I,
+    ) -> ty::EarlyBinder<I, impl Iterator<Item = ty::Binder<I, ty::TraitRef<I>>>>;
+    fn explicit_implied_const_bounds(
+        self,
+        cx: I,
+    ) -> ty::EarlyBinder<I, impl Iterator<Item = ty::Binder<I, ty::TraitRef<I>>>>;
 }
 
 pub trait Region<I: Interner<Region = Self>>:

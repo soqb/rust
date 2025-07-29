@@ -254,7 +254,7 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for ImplTraitInTraitFinder<'_, 'tcx> {
             // strategy, then just reinterpret the associated type like an opaque :^)
             let default_ty = self
                 .tcx
-                .type_of_alias(shifted_alias_ty.ctor)
+                .type_of(shifted_alias_ty.ctor.expect_def())
                 .instantiate(self.tcx, shifted_alias_ty.args);
 
             self.predicates.push(
