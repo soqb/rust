@@ -893,12 +893,21 @@ impl<'tcx> InferCtxt<'tcx> {
     }
 
     pub fn var_for_def(&self, span: Span, param: &ty::GenericParamDef) -> GenericArg<'tcx> {
+        self.var_for_alias_def(span, &param.into())
+    }
+
+    pub fn var_for_alias_def(
+        &self,
+        span: Span,
+        param: &ty::GenericAliasParamDef,
+    ) -> GenericArg<'tcx> {
         match param.kind {
             GenericParamDefKind::Lifetime => {
                 // Create a region inference variable for the given
                 // region parameter definition.
                 self.next_region_var(RegionVariableOrigin::RegionParameterDefinition(
-                    span, param.name,
+                    span,
+                    param.name.unwrap(),
                 ))
                 .into()
             }
@@ -913,13 +922,13 @@ impl<'tcx> InferCtxt<'tcx> {
                 // as the generic parameters for the default, `(T, U)`.
                 let ty_var_id = self.inner.borrow_mut().type_variables().new_var(
                     self.universe(),
-                    TypeVariableOrigin { param_def_id: Some(param.def_id), span },
+                    TypeVariableOrigin { param_def_id: param.def_id, span },
                 );
 
                 Ty::new_var(self.tcx, ty_var_id).into()
             }
             GenericParamDefKind::Const { .. } => {
-                let origin = ConstVariableOrigin { param_def_id: Some(param.def_id), span };
+                let origin = ConstVariableOrigin { param_def_id: param.def_id, span };
                 let const_var_id = self
                     .inner
                     .borrow_mut()
@@ -942,7 +951,7 @@ impl<'tcx> InferCtxt<'tcx> {
         span: Span,
         alias: ty::AliasCtor<'tcx>,
     ) -> ty::GenericArgsRef<'tcx> {
-        GenericArgs::for_alias(self.tcx, alias, |param, _| self.var_for_def(span, param))
+        GenericArgs::for_alias(self.tcx, alias, |param, _| self.var_for_alias_def(span, param))
     }
 
     /// Returns `true` if errors have been reported since this infcx was

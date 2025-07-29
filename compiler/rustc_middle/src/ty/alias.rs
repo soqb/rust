@@ -2,9 +2,29 @@ use std::marker::PhantomData;
 
 use rustc_hir::def_id::DefId;
 use rustc_macros::{HashStable, TyDecodable, TyEncodable, extension};
-use rustc_span::Span;
+use rustc_span::{Span, Symbol};
 
 use crate::ty::{self, TyCtxt};
+
+/// A slimmer `GenericParamDef` which generalises to all aliases.
+#[derive(Clone, Debug, TyEncodable, TyDecodable, HashStable)]
+pub struct GenericAliasParamDef {
+    pub name: Option<Symbol>,
+    pub def_id: Option<DefId>,
+    pub index: u32,
+    pub kind: ty::GenericParamDefKind,
+}
+
+impl<'a> From<&'a ty::GenericParamDef> for GenericAliasParamDef {
+    fn from(param: &'a ty::GenericParamDef) -> GenericAliasParamDef {
+        GenericAliasParamDef {
+            name: Some(param.name),
+            def_id: Some(param.def_id),
+            index: param.index,
+            kind: param.kind.clone(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, HashStable, TyEncodable, TyDecodable)]
 pub enum AliasCtor<'tcx> {
@@ -126,9 +146,9 @@ impl<'tcx> AliasCtor<'tcx> {
         }
     }
 
-    pub fn generics(self, cx: TyCtxt<'tcx>) -> &'tcx ty::Generics {
+    pub fn generics(self, cx: TyCtxt<'tcx>) -> impl ExactSizeIterator<Item = GenericAliasParamDef> {
         match self {
-            AliasCtor::Def(def_id) => cx.generics_of(def_id),
+            AliasCtor::Def(def_id) => cx.generics_of(def_id).own_params.iter().map(From::from),
         }
     }
 }

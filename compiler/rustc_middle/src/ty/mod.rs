@@ -67,7 +67,7 @@ use tracing::{debug, instrument, trace};
 pub use vtable::*;
 use {rustc_ast as ast, rustc_hir as hir};
 
-pub use self::alias::{AliasCtor, AliasTyInstExt};
+pub use self::alias::{AliasCtor, AliasTyInstExt, GenericAliasParamDef};
 pub use self::closure::{
     BorrowKind, CAPTURE_STRUCT_LOCAL, CaptureInfo, CapturedPlace, ClosureTypeInfo,
     MinCaptureInformationMap, MinCaptureList, RootVariableMinCaptureList, UpvarCapture, UpvarId,

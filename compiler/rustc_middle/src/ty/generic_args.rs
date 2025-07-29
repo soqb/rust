@@ -429,11 +429,15 @@ impl<'tcx> GenericArgs<'tcx> {
     /// The closures get to observe the [`GenericArgs`] as they're
     /// being built, which can be used to correctly
     /// replace defaults of generic parameters.
-    pub fn for_item<F>(tcx: TyCtxt<'tcx>, def_id: DefId, mk_kind: F) -> GenericArgsRef<'tcx>
+    pub fn for_item<F>(tcx: TyCtxt<'tcx>, def_id: DefId, mut mk_kind: F) -> GenericArgsRef<'tcx>
     where
         F: FnMut(&ty::GenericParamDef, &[GenericArg<'tcx>]) -> GenericArg<'tcx>,
     {
-        Self::for_alias(tcx, def_id.into(), mk_kind)
+        let defs = tcx.generics_of(def_id);
+        let count = defs.count();
+        let mut args = SmallVec::with_capacity(count);
+        Self::fill_item(&mut args, tcx, defs, &mut mk_kind);
+        tcx.mk_args(&args)
     }
 
     pub fn for_alias<F>(
@@ -442,12 +446,15 @@ impl<'tcx> GenericArgs<'tcx> {
         mut mk_kind: F,
     ) -> GenericArgsRef<'tcx>
     where
-        F: FnMut(&ty::GenericParamDef, &[GenericArg<'tcx>]) -> GenericArg<'tcx>,
+        F: FnMut(&ty::GenericAliasParamDef, &[GenericArg<'tcx>]) -> GenericArg<'tcx>,
     {
         let defs = ctor.generics(tcx);
-        let count = defs.count();
-        let mut args = SmallVec::with_capacity(count);
-        Self::fill_item(&mut args, tcx, defs, &mut mk_kind);
+        let mut args = SmallVec::<[GenericArg<'tcx>; 8]>::with_capacity(defs.len());
+        for param in defs {
+            let kind = mk_kind(&param, &args);
+            assert_eq!(param.index as usize, args.len(), "{args:#?}, {ctor:#?}");
+            args.push(kind);
+        }
         tcx.mk_args(&args)
     }
 
