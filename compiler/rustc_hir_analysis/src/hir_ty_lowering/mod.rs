@@ -2422,6 +2422,18 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             hir::TyKind::Tup(fields) => {
                 Ty::new_tup_from_iter(tcx, fields.iter().map(|t| self.lower_ty(t)))
             }
+            hir::TyKind::VariadicTup(args) => {
+                let ctor = ty::VariadicAliasCtor::new(
+                    tcx,
+                    hir_ty.span,
+                    args.iter().map(|arg| match arg {
+                        hir::TupleArg::Inline(_) => ty::TupleParam::Inline,
+                        hir::TupleArg::Unpacked(ty) => ty::TupleParam::Unpacked(ty.span),
+                    }),
+                );
+                ty::AliasTy::new(tcx, ctor.into(), args.iter().map(|arg| self.lower_ty(arg.ty())))
+                    .to_ty(tcx)
+            }
             hir::TyKind::FnPtr(bf) => {
                 check_c_variadic_abi(tcx, bf.decl, bf.abi, hir_ty.span);
 

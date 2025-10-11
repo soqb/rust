@@ -2644,8 +2644,8 @@ fn collect_paths_for_type(first_ty: &clean::Type, cache: &Cache) -> Vec<String> 
 
         match ty {
             clean::Type::Path { path } => process_path(path.def_id()),
-            clean::Type::Tuple(tys) => {
-                work.extend(tys.iter());
+            clean::Type::Tuple(args) => {
+                work.extend(args.into_iter().map(|arg| &arg.ty));
             }
             clean::Type::Slice(ty) => {
                 work.push_back(ty);

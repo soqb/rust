@@ -63,6 +63,7 @@ impl<'tcx> Printer<'tcx> for TypeNamePrinter<'tcx> {
 
             ty::Alias(ty::Free, _) => bug!("type_name: unexpected free alias"),
             ty::Alias(ty::Inherent, _) => bug!("type_name: unexpected inherent projection"),
+            ty::Alias(ty::Variadic, _) => bug!("type_name: unexpected variadic alias"),
             ty::CoroutineWitness(..) => bug!("type_name: unexpected `CoroutineWitness`"),
         }
     }

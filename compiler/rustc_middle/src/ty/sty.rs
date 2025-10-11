@@ -35,6 +35,8 @@ use crate::ty::{
 pub type TyKind<'tcx> = ir::TyKind<TyCtxt<'tcx>>;
 pub type TypeAndMut<'tcx> = ir::TypeAndMut<TyCtxt<'tcx>>;
 pub type AliasTy<'tcx> = ir::AliasTy<TyCtxt<'tcx>>;
+pub type AliasCtorKind<'tcx> = ir::AliasCtorKind<TyCtxt<'tcx>>;
+pub type TupleParam<'tcx> = ir::TupleParam<TyCtxt<'tcx>>;
 pub type FnSig<'tcx> = ir::FnSig<TyCtxt<'tcx>>;
 pub type Binder<'tcx, T> = ir::Binder<TyCtxt<'tcx>, T>;
 pub type EarlyBinder<'tcx, T> = ir::EarlyBinder<TyCtxt<'tcx>, T>;
@@ -518,13 +520,14 @@ impl<'tcx> Ty<'tcx> {
         kind: ty::AliasTyKind,
         alias_ty: ty::AliasTy<'tcx>,
     ) -> Ty<'tcx> {
-        let ty::AliasCtor::Def(def_id) = alias_ty.ctor;
-        debug_assert_matches!(
-            (kind, tcx.def_kind(def_id)),
-            (ty::Opaque, DefKind::OpaqueTy)
-                | (ty::Projection | ty::Inherent, DefKind::AssocTy)
-                | (ty::Free, DefKind::TyAlias)
-        );
+        if let Some(def_id) = alias_ty.ctor.def() {
+            debug_assert_matches!(
+                (kind, tcx.def_kind(def_id)),
+                (ty::Opaque, DefKind::OpaqueTy)
+                    | (ty::Projection | ty::Inherent, DefKind::AssocTy)
+                    | (ty::Free, DefKind::TyAlias)
+            );
+        }
         Ty::new(tcx, Alias(kind, alias_ty))
     }
 
@@ -539,7 +542,7 @@ impl<'tcx> Ty<'tcx> {
         Ty::new_alias(
             tcx,
             ty::Opaque,
-            AliasTy::new_from_args(tcx, ty::AliasCtor::Def(def_id), args),
+            AliasTy::new_from_args(tcx, ty::AliasCtor::from(def_id), args),
         )
     }
 

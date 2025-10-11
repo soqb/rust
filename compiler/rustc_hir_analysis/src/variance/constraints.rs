@@ -3,7 +3,7 @@
 //! The second pass over the HIR determines the set of constraints.
 //! We walk the set of items and, for each member, generate new constraints.
 
-use hir::def_id::{DefId, LocalDefId};
+use hir::def_id::LocalDefId;
 use rustc_hir as hir;
 use rustc_hir::def::DefKind;
 use rustc_middle::ty::{self, GenericArgKind, GenericArgsRef, Ty, TyCtxt};
@@ -277,7 +277,7 @@ impl<'a, 'tcx> ConstraintContext<'a, 'tcx> {
                 self.add_constraints_from_invariant_args(current, data.args, variance);
             }
 
-            ty::Alias(ty::Free, ref data) => {
+            ty::Alias(ty::Free | ty::Variadic, ref data) => {
                 self.add_constraints_from_args(
                     current,
                     data.ctor.expect_def(),
@@ -358,13 +358,14 @@ impl<'a, 'tcx> ConstraintContext<'a, 'tcx> {
     fn add_constraints_from_args(
         &mut self,
         current: &CurrentItem,
-        def_id: DefId,
+        ctor: impl Into<ty::AliasCtor<'tcx>>,
         args: GenericArgsRef<'tcx>,
         variance: VarianceTermPtr<'a>,
     ) {
+        let ctor = ctor.into();
         debug!(
-            "add_constraints_from_args(def_id={:?}, args={:?}, variance={:?})",
-            def_id, args, variance
+            "add_constraints_from_args(ctor={:?}, args={:?}, variance={:?})",
+            ctor, args, variance
         );
 
         // We don't record `inferred_starts` entries for empty generics.
@@ -372,10 +373,12 @@ impl<'a, 'tcx> ConstraintContext<'a, 'tcx> {
             return;
         }
 
-        let (local, remote) = if let Some(def_id) = def_id.as_local() {
+        let (local, remote) = if let Some(def_id) = ctor.def()
+            && let Some(def_id) = def_id.as_local()
+        {
             (Some(self.terms_cx.inferred_starts[&def_id]), None)
         } else {
-            (None, Some(self.tcx().variances_of(def_id)))
+            (None, Some(ctor.variances(self.tcx())))
         };
 
         for (i, arg) in args.iter().enumerate() {
@@ -387,7 +390,7 @@ impl<'a, 'tcx> ConstraintContext<'a, 'tcx> {
             } else {
                 // Parameter on an item defined within another crate:
                 // variance already inferred, just look it up.
-                self.constant_term(remote.as_ref().unwrap()[i])
+                self.constant_term(remote.as_ref().unwrap().clone().nth(i).unwrap())
             };
             let variance_i = self.xform(variance, variance_decl);
             debug!(

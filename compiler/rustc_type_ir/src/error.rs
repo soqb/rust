@@ -28,7 +28,7 @@ pub enum TypeError<I: Interner> {
     AbiMismatch(#[type_visitable(ignore)] ExpectedFound<I::Abi>),
     Mutability,
     ArgumentMutability(usize),
-    TupleSize(ExpectedFound<usize>),
+    TupleArity(ExpectedFound<ty::TupleArity>),
     ArraySize(ExpectedFound<I::Const>),
     ArgCount,
 
@@ -79,7 +79,7 @@ impl<I: Interner> TypeError<I> {
 
             Mutability
             | ArgumentMutability(_)
-            | TupleSize(_)
+            | TupleArity(_)
             | ArgCount
             | RegionsDoesNotOutlive(..)
             | RegionsInsufficientlyPolymorphic(..)

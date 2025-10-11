@@ -90,6 +90,7 @@ macro_rules! arena_types {
             [] autodiff_item: rustc_ast::expand::autodiff_attrs::AutoDiffItem,
             [] ordered_name_set: rustc_data_structures::fx::FxIndexSet<rustc_span::Symbol>,
             [] valtree: rustc_middle::ty::ValTreeKind<'tcx>,
+            [] variadic_alias_ctor: rustc_middle::ty::VariadicAliasCtorStorage<'tcx>,
             [] stable_order_of_exportable_impls:
                 rustc_data_structures::fx::FxIndexMap<rustc_hir::def_id::DefId, usize>,
 

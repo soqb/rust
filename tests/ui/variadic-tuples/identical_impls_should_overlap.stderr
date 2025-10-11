@@ -1,0 +1,11 @@
+error[E0119]: conflicting implementations of trait `Foo` for type `(_, _, ..(_), _, _)`
+  --> $DIR/identical_impls_should_overlap.rs:9:1
+   |
+LL | impl<A, B, C, D, R: Tuple> Foo for (A, B, ..R, C, D) {}
+   | ---------------------------------------------------- first implementation here
+LL | impl<A, B, C, D, R: Tuple> Foo for (D, A, ..R, B, C) {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ conflicting implementation for `(_, _, ..(_), _, _)`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0119`.

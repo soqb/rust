@@ -55,6 +55,7 @@ TrivialTypeTraversalImpls! {
     crate::PredicatePolarity,
     crate::UniverseIndex,
     crate::Variance,
+    crate::TupleArity,
     crate::solve::BuiltinImplSource,
     crate::solve::Certainty,
     crate::solve::GoalSource,

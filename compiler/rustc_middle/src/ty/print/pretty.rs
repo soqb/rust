@@ -798,7 +798,7 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                 }
             }
             ty::Foreign(def_id) => self.print_def_path(def_id, &[])?,
-            ty::Alias(ty::Projection | ty::Inherent | ty::Free, ref data) => data.print(self)?,
+            ty::Alias(ty::Projection | ty::Inherent | ty::Free | ty::Variadic, ref data) => data.print(self)?,
             ty::Placeholder(placeholder) => placeholder.print(self)?,
             ty::Alias(ty::Opaque, ty::AliasTy { ctor, args, .. }) => {
                 // We use verbose printing in 'NO_QUERIES' mode, to
@@ -2038,6 +2038,19 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
         Ok(())
     }
 
+    fn pretty_print_variadic_alias(
+        &mut self,
+        ctor: ty::VariadicAliasCtor<'tcx>,
+        args: Option<&'tcx [GenericArg<'tcx>]>,
+    ) -> Result<(), PrintError> {
+        self.parenthesized(|this| {
+            this.comma_sep(
+                ctor.tuple_params()
+                    .zip(args.into_iter().flatten().copied().map(Some).chain(iter::repeat(None))),
+            )
+        })
+    }
+
     fn should_print_verbose(&self) -> bool {
         self.tcx().sess.verbose_internals()
     }
@@ -2161,9 +2174,15 @@ impl<'t> TyCtxt<'t> {
     pub fn def_path_str(self, def_id: impl IntoQueryParam<DefId>) -> String {
         self.def_path_str_with_args(def_id, &[])
     }
-    pub fn alias_ctor_str(self, alias: ty::AliasCtor<'t>) -> String {
-        match alias {
-            ty::AliasCtor::Def(def_id) => self.def_path_str(def_id),
+    pub fn alias_ctor_str(self, ctor: ty::AliasCtor<'t>) -> String {
+        match ctor.kind() {
+            ty::AliasCtorKind::Def(def_id) => self.def_path_str(def_id),
+            ty::AliasCtorKind::Variadic(ctor) => {
+                FmtPrinter::print_string(self, Namespace::TypeNS, |cx| {
+                    cx.pretty_print_variadic_alias(ctor, None)
+                })
+                .unwrap()
+            }
         }
     }
 
@@ -3114,6 +3133,28 @@ define_print! {
         alias_term.print(p)?;
     }
 
+    (ty::TupleParam<'tcx>, Option<ty::GenericArg<'tcx>>) {
+        if self.0.is_unpacked() {
+            write!(p, "..")?;
+
+            if let Some(arg) = self.1 {
+                if let &ty::Infer(ty::TyVar(vid)) = arg.expect_ty().kind() && let None = p.ty_infer_name(vid) {
+                     write!(p, "(_)")?;
+                    return Ok(());
+                }
+            } else {
+                write!(p, "(_)")?;
+                return Ok(());
+            }
+        }
+
+        if let Some(arg) = self.1 {
+            arg.print(p)?;
+        } else {
+            write!(p, "_")?;
+        }
+    }
+
     ty::AliasTerm<'tcx> {
         match self.kind(p.tcx()) {
             ty::AliasTermKind::InherentTy | ty::AliasTermKind::InherentConst => p.pretty_print_inherent_projection(*self)?,
@@ -3134,6 +3175,7 @@ define_print! {
             | ty::AliasTermKind::ProjectionConst => {
                 p.print_def_path(self.ctor.expect_def(), self.args)?;
             }
+            ty::AliasTermKind::VariadicTy => p.pretty_print_variadic_alias(self.ctor.expect_variadic(), Some(self.args))?,
         }
     }
 

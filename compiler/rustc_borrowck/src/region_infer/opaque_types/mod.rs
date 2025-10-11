@@ -462,8 +462,8 @@ impl<'tcx> FallibleTypeFolder<TyCtxt<'tcx>> for ToArgRegionsFolder<'_, 'tcx> {
                 Ty::new_coroutine(tcx, def_id, self.fold_closure_args(def_id, args)?)
             }
 
-            ty::Alias(kind, ty::AliasTy { def_id, args, .. })
-                if let Some(variances) = tcx.opt_alias_variances(kind, def_id) =>
+            ty::Alias(kind, ty::AliasTy { ctor, args, .. })
+                if let Some(variances) = tcx.opt_alias_variances(kind, ctor) =>
             {
                 let args = tcx.mk_args_from_iter(std::iter::zip(variances, args.iter()).map(
                     |(&v, s)| {
@@ -474,7 +474,7 @@ impl<'tcx> FallibleTypeFolder<TyCtxt<'tcx>> for ToArgRegionsFolder<'_, 'tcx> {
                         }
                     },
                 ))?;
-                ty::AliasTy::new_from_args(tcx, def_id, args).to_ty(tcx)
+                ty::AliasTy::new_from_args(tcx, ctor, args).to_ty(tcx)
             }
 
             _ => ty.try_super_fold_with(self)?,

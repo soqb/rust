@@ -227,7 +227,7 @@ where
                     match kind {
                         ty::Inherent | ty::Projection => "associated type",
                         ty::Free => "type alias",
-                        ty::Opaque => unreachable!(),
+                        _ => unreachable!(),
                     },
                     &LazyDefPathStr { def_id, tcx },
                 ));
@@ -292,7 +292,8 @@ where
             | ty::Param(..)
             | ty::Bound(..)
             | ty::Error(_)
-            | ty::CoroutineWitness(..) => {}
+            | ty::CoroutineWitness(..)
+            | ty::Alias(ty::Variadic, _) => {}
             ty::Placeholder(..) | ty::Infer(..) => {
                 bug!("unexpected type: {:?}", ty)
             }

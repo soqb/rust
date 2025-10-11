@@ -478,7 +478,7 @@ impl<'tcx> TypeRelation<TyCtxt<'tcx>> for Generalizer<'_, 'tcx> {
             relate::relate_args_with_variances(
                 self,
                 item_def_id.into(),
-                opt_variances,
+                opt_variances.iter().copied(),
                 a_arg,
                 b_arg,
                 false,

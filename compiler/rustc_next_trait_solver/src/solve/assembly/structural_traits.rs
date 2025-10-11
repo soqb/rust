@@ -68,6 +68,10 @@ where
             // (T1, ..., Tn) -- meets any bound that all of T1...Tn meet
             Ok(ty::Binder::dummy(tys.to_vec()))
         }
+        ty::Alias(ty::Variadic, data) => {
+            // Similar to above: unlike other aliases, variadic aliases really do contain their arguments.
+            Ok(ty::Binder::dummy(data.args.iter().map(|arg| arg.expect_ty()).collect()))
+        }
 
         ty::Closure(_, args) => Ok(ty::Binder::dummy(vec![args.as_closure().tupled_upvars_ty()])),
 
@@ -146,7 +150,9 @@ where
         // impl {} for extern type
         ty::Foreign(..) => Err(NoSolution),
 
-        ty::Alias(..) | ty::Param(_) | ty::Placeholder(..) => Err(NoSolution),
+        ty::Alias(ty::Projection | ty::Inherent | ty::Opaque | ty::Free, ..)
+        | ty::Param(_)
+        | ty::Placeholder(..) => Err(NoSolution),
 
         ty::Bound(..)
         | ty::Infer(ty::TyVar(_) | ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_)) => {
@@ -158,6 +164,12 @@ where
         // impl {Meta,}Sized for ()
         // impl {Meta,}Sized for (T1, T2, .., Tn) where Tn: {Meta,}Sized if n >= 1
         ty::Tuple(tys) => Ok(ty::Binder::dummy(tys.last().map_or_else(Vec::new, |ty| vec![ty]))),
+        ty::Alias(ty::Variadic, data) => {
+            // Similar to above: unlike other aliases, variadic aliases really do contain their arguments.
+            Ok(ty::Binder::dummy(
+                data.args.last().map_or_else(Vec::new, |arg| vec![arg.expect_ty()]),
+            ))
+        }
 
         // impl {Meta,}Sized for Adt<Args...>
         //   where {meta,pointee,}sized_constraint(Adt)<Args...>: {Meta,}Sized
@@ -218,7 +230,7 @@ where
         | ty::Foreign(..)
         | ty::Ref(_, _, Mutability::Mut)
         | ty::Adt(_, _)
-        | ty::Alias(_, _)
+        | ty::Alias(ty::Projection | ty::Inherent | ty::Opaque | ty::Free, _)
         | ty::Param(_)
         | ty::Placeholder(..) => Err(NoSolution),
 
@@ -229,6 +241,10 @@ where
 
         // impl Copy/Clone for (T1, T2, .., Tn) where T1: Copy/Clone, T2: Copy/Clone, .. Tn: Copy/Clone
         ty::Tuple(tys) => Ok(ty::Binder::dummy(tys.to_vec())),
+        ty::Alias(ty::Variadic, data) => {
+            // Similar to above: unlike other aliases, variadic aliases really do contain their arguments.
+            Ok(ty::Binder::dummy(data.args.iter().map(|arg| arg.expect_ty()).collect()))
+        }
 
         // impl Copy/Clone for Closure where Self::TupledUpvars: Copy/Clone
         ty::Closure(_, args) => Ok(ty::Binder::dummy(vec![args.as_closure().tupled_upvars_ty()])),
@@ -770,6 +786,11 @@ pub(in crate::solve) fn const_conditions_for_destruct<I: Interner>(
             .iter()
             .map(|field_ty| ty::TraitRef::new(cx, destruct_def_id, [field_ty]))
             .collect()),
+        ty::Alias(ty::Variadic, data) => Ok(data
+            .args
+            .iter()
+            .map(|arg| ty::TraitRef::new(cx, destruct_def_id, [arg.expect_ty()]))
+            .collect()),
 
         // Trivially implement `[const] Destruct`
         ty::Bool
@@ -797,9 +818,11 @@ pub(in crate::solve) fn const_conditions_for_destruct<I: Interner>(
         // if their inner type implements it.
         ty::UnsafeBinder(_) => Err(NoSolution),
 
-        ty::Dynamic(..) | ty::Param(_) | ty::Alias(..) | ty::Placeholder(_) | ty::Foreign(_) => {
-            Err(NoSolution)
-        }
+        ty::Dynamic(..)
+        | ty::Param(_)
+        | ty::Alias(ty::Projection | ty::Inherent | ty::Opaque | ty::Free, ..)
+        | ty::Placeholder(_)
+        | ty::Foreign(_) => Err(NoSolution),
 
         ty::Bound(..)
         | ty::Infer(ty::TyVar(_) | ty::FreshTy(_) | ty::FreshIntTy(_) | ty::FreshFloatTy(_)) => {

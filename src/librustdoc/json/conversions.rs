@@ -550,6 +550,11 @@ impl FromClean<rustc_hir::TraitBoundModifiers> for TraitBoundModifier {
         }
     }
 }
+impl FromClean<clean::TupleArgument> for TupleArgument {
+    fn from_clean(arg: &clean::TupleArgument, renderer: &JsonRenderer<'_>) -> Self {
+        TupleArgument { type_: arg.ty.into_json(renderer), is_unpacked: arg.is_unpacked }
+    }
+}
 
 impl FromClean<clean::Type> for Type {
     fn from_clean(ty: &clean::Type, renderer: &JsonRenderer<'_>) -> Self {
@@ -569,7 +574,7 @@ impl FromClean<clean::Type> for Type {
             SelfTy => Type::Generic("Self".to_owned()),
             Primitive(p) => Type::Primitive(p.as_sym().to_string()),
             BareFunction(f) => Type::FunctionPointer(Box::new(f.into_json(renderer))),
-            Tuple(t) => Type::Tuple(t.into_json(renderer)),
+            Tuple(t) => Type::VariadicTuple(t.into_json(renderer)),
             Slice(t) => Type::Slice(Box::new(t.into_json(renderer))),
             Array(t, s) => {
                 Type::Array { type_: Box::new(t.into_json(renderer)), len: s.to_string() }

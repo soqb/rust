@@ -967,7 +967,18 @@ where
     ) -> Result<(), NoSolution> {
         // NOTE: this check is purely an optimization, the structural eq would
         // always fail if the term is not an inference variable.
-        if term.is_infer() {
+        let should_proceed = if term.is_infer() {
+            true
+        } else if let ty::AliasCtorKind::Variadic(_) = alias.ctor.kind()
+            && let Some(ty) = term.as_type()
+            && let ty::Tuple(_) = ty.kind()
+        {
+            true
+        } else {
+            false
+        };
+
+        if should_proceed {
             let cx = self.cx();
             // We need to relate `alias` to `term` treating only the outermost
             // constructor as rigid, relating any contained generic arguments as

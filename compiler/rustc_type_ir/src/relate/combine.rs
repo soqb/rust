@@ -39,6 +39,39 @@ where
     fn register_alias_relate_predicate(&mut self, a: I::Ty, b: I::Ty);
 }
 
+// pub fn try_combine_variadic_aliases<Infcx, I, R>(
+//     infcx: &Infcx,
+//     relation: &mut R,
+//     a: I::Ty,
+//     b: I::Ty,
+// ) -> RelateResult<I, Option<I::Ty>>
+// where
+//     Infcx: InferCtxtLike<Interner = I>,
+//     I: Interner,
+//     R: PredicateEmittingRelation<Infcx>,
+// {
+//     if let ty::Alias(ty::Variadic, ty::AliasTy { args: a_args, ctor: a_ctor, .. }) = a.kind() && let ty::Alias(ty::Variadic, ty::AliasTy { args: b_args, ctor: b_ctor, .. }) {
+//         if (a_ctor.expect_variadic().tuple_params().next().unwrap().is_unpacked() && b_ctor.expect_variadic().tuple_params().next_back().unwrap().is_unpacked()) || (b_ctor.expect_variadic().tuple_params().next().unwrap().is_unpacked() && a_ctor.expect_variadic().tuple_params().next_back().unwrap().is_unpacked()) {
+//             match infcx.typing_mode() {
+//                 // During coherence, opaque types should be treated as *possibly*
+//                 // equal to any other type. This is an
+//                 // extremely heavy hammer, but can be relaxed in a forwards-compatible
+//                 // way later.
+//                 TypingMode::Coherence => {
+//                     relation.register_predicates([ty::Binder::dummy(ty::PredicateKind::Ambiguous)]);
+//                     Ok(a)
+//                 }
+//                 TypingMode::Analysis { .. }
+//                 | TypingMode::Borrowck { .. }
+//                 | TypingMode::PostBorrowckAnalysis { .. }
+//                 | TypingMode::PostAnalysis => structurally_relate_tys(relation, a, b),
+//             }
+//         }
+//     }
+
+//     Ok(None)
+// }
+
 pub fn super_combine_tys<Infcx, I, R>(
     infcx: &Infcx,
     relation: &mut R,

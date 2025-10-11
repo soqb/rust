@@ -6,6 +6,7 @@ use rustc_data_structures::sso::SsoHashMap;
 use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_infer::traits::PredicateObligations;
 use rustc_macros::extension;
+use rustc_middle::span_bug;
 pub use rustc_middle::traits::query::NormalizationResult;
 use rustc_middle::ty::{
     self, FallibleTypeFolder, Ty, TyCtxt, TypeFoldable, TypeSuperFoldable, TypeSuperVisitable,
@@ -325,6 +326,10 @@ impl<'a, 'tcx> FallibleTypeFolder<TyCtxt<'tcx>> for QueryNormalizer<'a, 'tcx> {
                     res
                 }
             }
+            ty::Variadic => span_bug!(
+                data.ctor.expect_variadic().span(),
+                "variadic aliases only supported by the new solver",
+            ),
         };
 
         self.cache.insert(ty, res);

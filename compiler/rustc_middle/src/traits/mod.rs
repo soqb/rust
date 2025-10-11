@@ -265,6 +265,9 @@ pub enum ObligationCauseCode<'tcx> {
         last: bool,
     },
 
+    /// Unpacked arguments to a variadic alias must implement `Tuple`.
+    VariadicArgumentTuple,
+
     /// Constant expressions must be sized.
     SizedConstOrStatic,
 

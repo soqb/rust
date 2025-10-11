@@ -695,6 +695,7 @@ where
             | ty::CoroutineWitness(..)
             | ty::Never
             | ty::Tuple(_)
+            | ty::Alias(ty::Variadic, _)
             | ty::Param(_)
             | ty::Placeholder(..)
             | ty::Infer(ty::IntVar(_) | ty::FloatVar(_))
@@ -1015,7 +1016,7 @@ where
             // in a `?x: Trait<u32>` alias-bound candidate.
             for item_bound in self
                 .cx()
-                .item_self_bounds(alias_ty.def_id)
+                .item_self_bounds(alias_ty.ctor.expect_def())
                 .iter_instantiated(self.cx(), alias_ty.args)
             {
                 let assumption =

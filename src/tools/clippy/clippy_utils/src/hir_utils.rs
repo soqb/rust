@@ -11,7 +11,7 @@ use rustc_hir::{
     AssocItemConstraint, BinOpKind, BindingMode, Block, BodyId, Closure, ConstArg, ConstArgKind, Expr, ExprField,
     ExprKind, FnRetTy, GenericArg, GenericArgs, HirId, HirIdMap, InlineAsmOperand, LetExpr, Lifetime, LifetimeKind,
     Node, Pat, PatExpr, PatExprKind, PatField, PatKind, Path, PathSegment, PrimTy, QPath, Stmt, StmtKind,
-    StructTailExpr, TraitBoundModifiers, Ty, TyKind, TyPat, TyPatKind,
+    StructTailExpr, TraitBoundModifiers, TupleArg, Ty, TyKind, TyPat, TyPatKind,
 };
 use rustc_lexer::{FrontmatterAllowed, TokenKind, tokenize};
 use rustc_lint::LateContext;
@@ -1302,6 +1302,12 @@ impl<'a, 'tcx> SpanlessHash<'a, 'tcx> {
             TyKind::Tup(ty_list) => {
                 for ty in *ty_list {
                     self.hash_ty(ty);
+                }
+            },
+            TyKind::VariadicTup(args) => {
+                for arg in *args {
+                    matches!(arg, TupleArg::Unpacked(_)).hash(&mut self.s);
+                    self.hash_ty(arg.ty());
                 }
             },
             TyKind::Path(qpath) => self.hash_qpath(qpath),

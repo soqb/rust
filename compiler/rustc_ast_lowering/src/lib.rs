@@ -1324,9 +1324,23 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
                 }))
             }
             TyKind::Never => hir::TyKind::Never,
-            TyKind::Tup(tys) => hir::TyKind::Tup(
-                self.arena.alloc_from_iter(tys.iter().map(|ty| self.lower_ty_direct(ty, itctx))),
-            ),
+            TyKind::Tup(tys) => {
+                if tys.iter().any(|ty| matches!(ty.kind, TyKind::Unpacked(_))) {
+                    hir::TyKind::VariadicTup(self.arena.alloc_from_iter(tys.iter().map(|ty| {
+                        let (ty, ctor): (_, fn(_) -> _) = if let TyKind::Unpacked(ty) = &ty.kind {
+                            (ty, hir::TupleArg::Unpacked)
+                        } else {
+                            (ty, hir::TupleArg::Inline)
+                        };
+                        ctor(self.arena.alloc(self.lower_ty_direct(ty, itctx)))
+                    })))
+                } else {
+                    hir::TyKind::Tup(
+                        self.arena
+                            .alloc_from_iter(tys.iter().map(|ty| self.lower_ty_direct(ty, itctx))),
+                    )
+                }
+            }
             TyKind::Paren(ty) => {
                 return self.lower_ty_direct(ty, itctx);
             }
@@ -1456,6 +1470,13 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             }
             TyKind::MacCall(_) => {
                 span_bug!(t.span, "`TyKind::MacCall` should have been expanded by now")
+            }
+            TyKind::Unpacked(_) => {
+                let guar = self.dcx().span_delayed_bug(
+                    t.span,
+                    "`TyKind::Unpacked(_)` should have been lowered elsewhere",
+                );
+                hir::TyKind::Err(guar)
             }
             TyKind::CVarArgs => {
                 let guar = self.dcx().span_delayed_bug(

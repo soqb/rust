@@ -145,6 +145,7 @@ pub trait Interner:
     type Safety: Safety<Self>;
     type Abi: Abi<Self>;
     type AliasCtor: AliasCtor<Self>;
+    type VariadicAliasCtor: VariadicAliasCtor<Self>;
 
     // Kinds of consts
     type Const: Const<Self>;

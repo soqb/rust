@@ -2,6 +2,7 @@ mod anon_const;
 mod free_alias;
 mod inherent;
 mod opaque_types;
+mod variadic;
 
 use rustc_type_ir::fast_reject::DeepRejectCtxt;
 use rustc_type_ir::inherent::*;
@@ -56,6 +57,7 @@ where
             ty::AliasTermKind::FreeTy | ty::AliasTermKind::FreeConst => {
                 self.normalize_free_alias(goal)
             }
+            ty::AliasTermKind::VariadicTy => self.normalize_variadic_ty(goal),
             ty::AliasTermKind::UnevaluatedConst => self.normalize_anon_const(goal),
         }
     }
@@ -159,6 +161,7 @@ where
             | ty::AliasTermKind::InherentTy
             | ty::AliasTermKind::InherentConst
             | ty::AliasTermKind::FreeTy
+            | ty::AliasTermKind::VariadicTy
             | ty::AliasTermKind::FreeConst
             | ty::AliasTermKind::UnevaluatedConst => {}
         }

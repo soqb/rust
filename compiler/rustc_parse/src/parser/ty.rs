@@ -15,8 +15,9 @@ use super::{Parser, PathStyle, SeqSep, TokenType, Trailing};
 use crate::errors::{
     self, AttributeOnEmptyType, AttributeOnType, DynAfterMut, ExpectedFnPathFoundFnKeyword,
     ExpectedMutOrConstInRawPointerType, FnPtrWithGenerics, FnPtrWithGenericsSugg,
-    HelpUseLatestEdition, InvalidCVariadicType, InvalidDynKeyword, LifetimeAfterMut,
-    NeedPlusAfterTraitObjectLifetime, NestedCVariadicType, ReturnTypesUseThinArrow,
+    HelpUseLatestEdition, InvalidCVariadicType, InvalidDynKeyword, InvalidTupleUnpacking,
+    LifetimeAfterMut, NeedPlusAfterTraitObjectLifetime, NestedCVariadicType,
+    ReturnTypesUseThinArrow,
 };
 use crate::parser::item::FrontMatterParsingMode;
 use crate::parser::{FnContext, FnParseMode};
@@ -82,6 +83,12 @@ enum AllowCVariadic {
     No,
 }
 
+// Is `..T` legal at this level of type parsing?
+pub(super) enum AllowTupleUnpacking {
+    Yes,
+    No,
+}
+
 /// Returns `true` if `IDENT t` can start a type -- `IDENT::a::b`, `IDENT<u8, u8>`,
 /// `IDENT<<u8 as Trait>::AssocTy>`.
 ///
@@ -120,6 +127,7 @@ impl<'a> Parser<'a> {
             self.parse_ty_common(
                 AllowPlus::Yes,
                 AllowCVariadic::No,
+                AllowTupleUnpacking::No,
                 RecoverQPath::Yes,
                 RecoverReturnSign::Yes,
                 None,
@@ -135,6 +143,7 @@ impl<'a> Parser<'a> {
         self.parse_ty_common(
             AllowPlus::Yes,
             AllowCVariadic::No,
+            AllowTupleUnpacking::No,
             RecoverQPath::Yes,
             RecoverReturnSign::Yes,
             Some(ty_params),
@@ -149,6 +158,7 @@ impl<'a> Parser<'a> {
         let ty = self.parse_ty_common(
             AllowPlus::Yes,
             AllowCVariadic::Yes,
+            AllowTupleUnpacking::No,
             RecoverQPath::Yes,
             RecoverReturnSign::Yes,
             None,
@@ -189,6 +199,7 @@ impl<'a> Parser<'a> {
         self.parse_ty_common(
             AllowPlus::No,
             AllowCVariadic::No,
+            AllowTupleUnpacking::No,
             RecoverQPath::Yes,
             RecoverReturnSign::Yes,
             None,
@@ -202,6 +213,7 @@ impl<'a> Parser<'a> {
         self.parse_ty_common(
             AllowPlus::No,
             AllowCVariadic::No,
+            AllowTupleUnpacking::No,
             RecoverQPath::Yes,
             RecoverReturnSign::Yes,
             None,
@@ -213,6 +225,7 @@ impl<'a> Parser<'a> {
         self.parse_ty_common(
             AllowPlus::Yes,
             AllowCVariadic::No,
+            AllowTupleUnpacking::No,
             RecoverQPath::Yes,
             RecoverReturnSign::Yes,
             None,
@@ -226,6 +239,7 @@ impl<'a> Parser<'a> {
         self.parse_ty_common(
             AllowPlus::Yes,
             AllowCVariadic::No,
+            AllowTupleUnpacking::No,
             RecoverQPath::Yes,
             RecoverReturnSign::OnlyFatArrow,
             None,
@@ -246,6 +260,7 @@ impl<'a> Parser<'a> {
             let ty = self.parse_ty_common(
                 allow_plus,
                 AllowCVariadic::No,
+                AllowTupleUnpacking::No,
                 recover_qpath,
                 recover_return_sign,
                 None,
@@ -263,6 +278,7 @@ impl<'a> Parser<'a> {
             let ty = self.parse_ty_common(
                 allow_plus,
                 AllowCVariadic::No,
+                AllowTupleUnpacking::No,
                 recover_qpath,
                 recover_return_sign,
                 None,
@@ -274,10 +290,23 @@ impl<'a> Parser<'a> {
         })
     }
 
+    pub(super) fn parse_ty_for_tuple_argument(&mut self) -> PResult<'a, Box<Ty>> {
+        self.parse_ty_common(
+            AllowPlus::Yes,
+            AllowCVariadic::No,
+            AllowTupleUnpacking::Yes,
+            RecoverQPath::Yes,
+            RecoverReturnSign::Yes,
+            None,
+            RecoverQuestionMark::Yes,
+        )
+    }
+
     fn parse_ty_common(
         &mut self,
         allow_plus: AllowPlus,
         allow_c_variadic: AllowCVariadic,
+        allow_tuple_unpacking: AllowTupleUnpacking,
         recover_qpath: RecoverQPath,
         recover_return_sign: RecoverReturnSign,
         ty_generics: Option<&Generics>,
@@ -418,7 +447,17 @@ impl<'a> Parser<'a> {
                     // FIXME(c_variadic): Should we just allow `...` syntactically
                     // anywhere in a type and use semantic restrictions instead?
                     // NOTE: This may regress certain MBE calls if done incorrectly.
+                    //
+                    // We should similarly consider the below branch.
                     let guar = self.dcx().emit_err(NestedCVariadicType { span: lo });
+                    TyKind::Err(guar)
+                }
+            }
+        } else if self.eat(exp!(DotDot)) {
+            match allow_tuple_unpacking {
+                AllowTupleUnpacking::Yes => TyKind::Unpacked(self.parse_ty()?),
+                AllowTupleUnpacking::No => {
+                    let guar = self.dcx().emit_err(InvalidTupleUnpacking { span: lo });
                     TyKind::Err(guar)
                 }
             }
@@ -466,12 +505,17 @@ impl<'a> Parser<'a> {
     fn parse_ty_tuple_or_parens(&mut self, lo: Span, allow_plus: AllowPlus) -> PResult<'a, TyKind> {
         let mut trailing_plus = false;
         let (ts, trailing) = self.parse_paren_comma_seq(|p| {
-            let ty = p.parse_ty()?;
+            let ty = p.parse_ty_for_tuple_argument()?;
             trailing_plus = p.prev_token == TokenKind::Plus;
             Ok(ty)
         })?;
 
         if ts.len() == 1 && matches!(trailing, Trailing::No) {
+            if let TyKind::Unpacked(_) = &ts[0].kind {
+                // `(..TYPE)` is a valid tuple (even sans the trailing comma).
+                return Ok(TyKind::Tup(ts));
+            }
+
             let ty = ts.into_iter().next().unwrap();
             let maybe_bounds = allow_plus == AllowPlus::Yes && self.token.is_like_plus();
             match ty.kind {

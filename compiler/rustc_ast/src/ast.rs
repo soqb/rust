@@ -2469,8 +2469,10 @@ pub enum TyKind {
     UnsafeBinder(Box<UnsafeBinderTy>),
     /// The never type (`!`).
     Never,
-    /// A tuple (`(A, B, C, D,...)`).
+    /// A tuple (`(A, B, C, D)`).
     Tup(ThinVec<Box<Ty>>),
+    /// An unpacked tuple element (`..T`).
+    Unpacked(Box<Ty>),
     /// A path (`module::module::...::Type`), optionally
     /// "qualified", e.g., `<Vec<T> as SomeTrait>::SomeType`.
     ///

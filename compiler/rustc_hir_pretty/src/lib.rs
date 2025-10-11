@@ -405,6 +405,20 @@ impl<'a> State<'a> {
                 }
                 self.pclose();
             }
+            hir::TyKind::VariadicTup(elts) => {
+                self.popen();
+                self.commasep(Inconsistent, elts, |s, arg| match arg {
+                    hir::TupleArg::Inline(ty) => s.print_type(ty),
+                    hir::TupleArg::Unpacked(ty) => {
+                        s.word("..");
+                        s.print_type(ty)
+                    }
+                });
+                if elts.len() == 1 {
+                    self.word(",");
+                }
+                self.pclose();
+            }
             hir::TyKind::FnPtr(f) => {
                 self.print_ty_fn(f.abi, f.safety, f.decl, None, f.generic_params, f.param_idents);
             }

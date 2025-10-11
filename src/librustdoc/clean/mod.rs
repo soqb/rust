@@ -1814,7 +1814,19 @@ pub(crate) fn clean_ty<'tcx>(ty: &hir::Ty<'tcx>, cx: &mut DocContext<'tcx>) -> T
             };
             Array(Box::new(clean_ty(ty, cx)), length.into())
         }
-        TyKind::Tup(tys) => Tuple(tys.iter().map(|ty| clean_ty(ty, cx)).collect()),
+        TyKind::Tup(tys) => Tuple(
+            tys.iter()
+                .map(|ty| TupleArgument { ty: clean_ty(ty, cx), is_unpacked: false })
+                .collect(),
+        ),
+        TyKind::VariadicTup(args) => Tuple(
+            args.iter()
+                .map(|arg| TupleArgument {
+                    ty: clean_ty(arg.ty(), cx),
+                    is_unpacked: matches!(arg, TupleArg::Unpacked(_)),
+                })
+                .collect(),
+        ),
         TyKind::OpaqueDef(ty) => {
             ImplTrait(ty.bounds.iter().filter_map(|x| clean_generic_bound(x, cx)).collect())
         }
@@ -2152,9 +2164,24 @@ pub(crate) fn clean_middle_ty<'tcx>(
 
             DynTrait(bounds, lifetime)
         }
-        ty::Tuple(t) => {
-            Tuple(t.iter().map(|t| clean_middle_ty(bound_ty.rebind(t), cx, None, None)).collect())
-        }
+
+        ty::Tuple(t) => Tuple(
+            t.iter()
+                .map(|t| TupleArgument {
+                    ty: clean_middle_ty(bound_ty.rebind(t), cx, None, None),
+                    is_unpacked: false,
+                })
+                .collect(),
+        ),
+        ty::Alias(ty::Variadic, ty::AliasTy { ctor, args, .. }) => Tuple(
+            args.iter()
+                .zip(ctor.expect_variadic().arities())
+                .map(|(arg, arity)| TupleArgument {
+                    ty: clean_middle_ty(bound_ty.rebind(arg.expect_ty()), cx, None, None),
+                    is_unpacked: arity == ty::ElementArity::Variadic,
+                })
+                .collect(),
+        ),
 
         ty::Alias(ty::Projection, alias_ty @ ty::AliasTy { ctor, args, .. }) => {
             if cx.tcx.is_impl_trait_in_trait(ctor) {

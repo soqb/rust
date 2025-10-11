@@ -202,6 +202,10 @@ pub(crate) fn orphan_check_impl(
                     // ```
                     // FIXME(inherent_associated_types): The example code above currently leads to a cycle
                     ty::Inherent => "associated type",
+                    // ```
+                    // type S<A, B> = (A, ..B);
+                    // ```
+                    ty::Variadic => "variadic tuple",
                 };
                 (LocalImpl::Disallow { problematic_kind }, NonlocalImpl::DisallowOther)
             }

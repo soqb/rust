@@ -1029,6 +1029,7 @@ impl Rewrite for ast::Ty {
                     format!("impl{}{}", space, it_str)
                 })
             }
+            ast::TyKind::Unpacked(ref ty) => rewrite_unary_prefix(context, "..", ty, shape),
             ast::TyKind::CVarArgs => Ok("...".to_owned()),
             ast::TyKind::Dummy | ast::TyKind::Err(_) => Ok(context.snippet(self.span).to_owned()),
             ast::TyKind::Typeof(ref anon_const) => rewrite_call(

@@ -385,7 +385,7 @@ impl<'tcx> GenericPredicates<'tcx> {
     }
 
     #[instrument(level = "debug", skip(self, tcx))]
-    fn instantiate_into(
+    pub(crate) fn instantiate_into(
         self,
         tcx: TyCtxt<'tcx>,
         instantiated: &mut InstantiatedPredicates<'tcx>,

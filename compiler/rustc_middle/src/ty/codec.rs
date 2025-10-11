@@ -483,12 +483,6 @@ impl<'tcx, D: TyDecoder<'tcx>> RefDecodable<'tcx, D> for ty::List<LocalDefId> {
     }
 }
 
-impl<'tcx, D: TyDecoder<'tcx>> Decodable<D> for &'tcx ty::List<LocalDefId> {
-    fn decode(d: &mut D) -> Self {
-        RefDecodable::decode(d)
-    }
-}
-
 impl<'tcx, D: TyDecoder<'tcx>> RefDecodable<'tcx, D> for ty::List<(VariantIdx, FieldIdx)> {
     fn decode(decoder: &mut D) -> &'tcx Self {
         let len = decoder.read_usize();

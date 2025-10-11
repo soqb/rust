@@ -464,7 +464,8 @@ where
     /// impl Tuple for () {}
     /// impl Tuple for (T1,) {}
     /// impl Tuple for (T1, T2) {}
-    /// impl Tuple for (T1, .., Tn) {}
+    /// impl Tuple for (T1, T2, T3) {}
+    /// // and so on..
     /// ```
     fn consider_builtin_tuple_candidate(
         ecx: &mut EvalCtxt<'_, D>,
@@ -474,7 +475,7 @@ where
             return Err(NoSolution);
         }
 
-        if let ty::Tuple(..) = goal.predicate.self_ty().kind() {
+        if let ty::Tuple(..) | ty::Alias(ty::Variadic, ..) = goal.predicate.self_ty().kind() {
             ecx.probe_builtin_trait_candidate(BuiltinImplSource::Misc)
                 .enter(|ecx| ecx.evaluate_added_goals_and_make_canonical_response(Certainty::Yes))
         } else {
@@ -711,6 +712,17 @@ where
                         GoalSource::ImplWhereBound,
                         tys.iter().map(|elem_ty| {
                             goal.with(cx, ty::TraitRef::new(cx, goal.predicate.def_id(), [elem_ty]))
+                        }),
+                    );
+                }
+                ty::Alias(ty::Variadic, data) => {
+                    ecx.add_goals(
+                        GoalSource::ImplWhereBound,
+                        data.args.iter().map(|arg| {
+                            goal.with(
+                                cx,
+                                ty::TraitRef::new(cx, goal.predicate.def_id(), [arg.expect_ty()]),
+                            )
                         }),
                     );
                 }

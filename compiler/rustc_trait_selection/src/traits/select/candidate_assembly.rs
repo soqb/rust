@@ -790,6 +790,10 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                     // for an example of a test case that exercises
                     // this path.
                 }
+                ty::Alias(ty::Variadic, data) => span_bug!(
+                    data.ctor.expect_variadic().span(),
+                    "variadic aliases only supported by the new solver",
+                ),
                 ty::Infer(ty::TyVar(_) | ty::IntVar(_) | ty::FloatVar(_)) => {
                     // The auto impl might apply; we don't know.
                     candidates.ambiguous = true;

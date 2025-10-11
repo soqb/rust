@@ -495,6 +495,8 @@ pub enum AliasTermKind {
     /// Currently only used if the type alias references opaque types.
     /// Can always be normalized away.
     FreeTy,
+    /// An alias corresponding to a variadic tuple type.
+    VariadicTy,
 
     /// An unevaluated anonymous constants.
     UnevaluatedConst,
@@ -517,6 +519,7 @@ impl AliasTermKind {
             AliasTermKind::FreeTy => "type alias",
             AliasTermKind::FreeConst => "unevaluated constant",
             AliasTermKind::UnevaluatedConst => "unevaluated constant",
+            AliasTermKind::VariadicTy => "variadic tuple type",
         }
     }
 
@@ -525,7 +528,8 @@ impl AliasTermKind {
             AliasTermKind::ProjectionTy
             | AliasTermKind::InherentTy
             | AliasTermKind::OpaqueTy
-            | AliasTermKind::FreeTy => true,
+            | AliasTermKind::FreeTy
+            | AliasTermKind::VariadicTy => true,
 
             AliasTermKind::UnevaluatedConst
             | AliasTermKind::ProjectionConst
@@ -542,6 +546,7 @@ impl From<ty::AliasTyKind> for AliasTermKind {
             ty::Opaque => AliasTermKind::OpaqueTy,
             ty::Free => AliasTermKind::FreeTy,
             ty::Inherent => AliasTermKind::InherentTy,
+            ty::Variadic => AliasTermKind::VariadicTy,
         }
     }
 }
@@ -599,7 +604,8 @@ impl<I: Interner> AliasTerm<I> {
             AliasTermKind::ProjectionTy
             | AliasTermKind::InherentTy
             | AliasTermKind::OpaqueTy
-            | AliasTermKind::FreeTy => {}
+            | AliasTermKind::FreeTy
+            | AliasTermKind::VariadicTy => {}
             AliasTermKind::InherentConst
             | AliasTermKind::FreeConst
             | AliasTermKind::UnevaluatedConst
@@ -637,6 +643,12 @@ impl<I: Interner> AliasTerm<I> {
             AliasTermKind::FreeTy => Ty::new_alias(
                 interner,
                 ty::AliasTyKind::Free,
+                ty::AliasTy { ctor: self.ctor, args: self.args, _use_alias_ty_new_instead: () },
+            )
+            .into(),
+            AliasTermKind::VariadicTy => Ty::new_alias(
+                interner,
+                ty::AliasTyKind::Variadic,
                 ty::AliasTy { ctor: self.ctor, args: self.args, _use_alias_ty_new_instead: () },
             )
             .into(),

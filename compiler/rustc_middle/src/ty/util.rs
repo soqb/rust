@@ -770,8 +770,9 @@ impl<'tcx> TyCtxt<'tcx> {
     }
 
     pub fn alias_descr(self, ctor: ty::AliasCtor<'tcx>) -> &'static str {
-        match ctor {
-            ty::AliasCtor::Def(def_id) => self.def_descr(def_id),
+        match ctor.def() {
+            Some(def_id) => self.def_descr(def_id),
+            None => "variadic tuple",
         }
     }
 
@@ -948,6 +949,7 @@ impl<'tcx> TyCtxt<'tcx> {
             ty::AliasTermKind::InherentTy
             | ty::AliasTermKind::InherentConst
             | ty::AliasTermKind::FreeTy
+            | ty::AliasTermKind::VariadicTy
             | ty::AliasTermKind::FreeConst
             | ty::AliasTermKind::UnevaluatedConst
             | ty::AliasTermKind::ProjectionConst => None,

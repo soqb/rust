@@ -874,10 +874,12 @@ fn fmt_type(
             print_higher_ranked_params_with_space(&binder.generic_params, cx, "unsafe").fmt(f)?;
             binder.ty.print(cx).fmt(f)
         }
-        clean::Tuple(typs) => match &typs[..] {
+        clean::Tuple(args) => match &args[..] {
             &[] => primitive_link(f, PrimitiveType::Unit, format_args!("()"), cx),
             [one] => {
-                if let clean::Generic(name) = one {
+                if !one.is_unpacked
+                    && let clean::Generic(name) = &one.ty
+                {
                     primitive_link(f, PrimitiveType::Tuple, format_args!("({name},)"), cx)
                 } else {
                     write!(f, "(")?;
@@ -888,8 +890,8 @@ fn fmt_type(
             many => {
                 let generic_names: Vec<Symbol> = many
                     .iter()
-                    .filter_map(|t| match t {
-                        clean::Generic(name) => Some(*name),
+                    .filter_map(|a| match &a.ty {
+                        clean::Generic(name) if !a.is_unpacked => Some(*name),
                         _ => None,
                     })
                     .collect();
@@ -1002,6 +1004,18 @@ impl clean::Type {
 impl clean::Path {
     pub(crate) fn print(&self, cx: &Context<'_>) -> impl Display {
         fmt::from_fn(move |f| resolved_path(f, self.def_id(), self, false, false, cx))
+    }
+}
+
+impl clean::TupleArgument {
+    pub(crate) fn print(&self, cx: &Context<'_>) -> impl Display {
+        fmt::from_fn(move |f| {
+            if self.is_unpacked {
+                f.write_str("..")?;
+            }
+
+            fmt_type(&self.ty, f, false, cx)
+        })
     }
 }
 
@@ -1124,7 +1138,9 @@ impl clean::Impl {
         cx: &Context<'_>,
     ) -> Result<(), fmt::Error> {
         if let clean::Type::Tuple(types) = type_
-            && let [clean::Type::Generic(name)] = &types[..]
+            && let [arg] = &types[..]
+            && !arg.is_unpacked
+            && let clean::Type::Generic(name) = &arg.ty
             && (self.kind.is_fake_variadic() || self.kind.is_auto())
         {
             // Hardcoded anchor library/core/src/primitive_docs.rs

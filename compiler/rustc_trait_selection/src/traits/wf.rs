@@ -15,7 +15,7 @@ use rustc_middle::ty::{
     TypeVisitableExt, TypeVisitor,
 };
 use rustc_session::parse::feature_err;
-use rustc_span::def_id::{DefId, LocalDefId};
+use rustc_span::def_id::LocalDefId;
 use rustc_span::{Span, sym};
 use tracing::{debug, instrument, trace};
 
@@ -565,32 +565,40 @@ impl<'a, 'tcx> WfPredicates<'a, 'tcx> {
     #[instrument(level = "debug", skip(self))]
     fn nominal_obligations(
         &mut self,
-        def_id: DefId,
+        ctor: impl Into<ty::AliasCtor<'tcx>> + std::fmt::Debug,
         args: GenericArgsRef<'tcx>,
     ) -> PredicateObligations<'tcx> {
+        let ctor = ctor.into();
         // PERF: `Sized`'s predicates include `MetaSized`, but both are compiler implemented marker
         // traits, so `MetaSized` will always be WF if `Sized` is WF and vice-versa. Determining
         // the nominal obligations of `Sized` would in-effect just elaborate `MetaSized` and make
         // the compiler do a bunch of work needlessly.
-        if self.tcx().is_lang_item(def_id, LangItem::Sized) {
+        if let Some(def_id) = ctor.def()
+            && self.tcx().is_lang_item(def_id, LangItem::Sized)
+        {
             return Default::default();
         }
 
-        let predicates = self.tcx().predicates_of(def_id);
-        let mut origins = vec![def_id; predicates.predicates.len()];
-        let mut head = predicates;
-        while let Some(parent) = head.parent {
-            head = self.tcx().predicates_of(parent);
-            origins.extend(iter::repeat(parent).take(head.predicates.len()));
+        let predicates = ctor.predicates(self.tcx());
+        let mut origins = vec![ctor.def(); predicates.skip_binder().len()];
+
+        let mut parent = ctor.parent(self.tcx());
+        while let Some(def_id) = parent {
+            let predicates = self.tcx().predicates_of(def_id);
+            origins.extend(iter::repeat_n(Some(def_id), predicates.predicates.len()));
+            parent = predicates.parent;
         }
 
-        let predicates = predicates.instantiate(self.tcx(), args);
+        let predicates = ctor.instantiate_predicates(self.tcx(), args);
         trace!("{:#?}", predicates);
         debug_assert_eq!(predicates.predicates.len(), origins.len());
 
         iter::zip(predicates, origins.into_iter().rev())
             .map(|((pred, span), origin_def_id)| {
-                let code = ObligationCauseCode::WhereClause(origin_def_id, span);
+                let code = match origin_def_id {
+                    Some(def_id) => ObligationCauseCode::WhereClause(def_id, span),
+                    None => ObligationCauseCode::VariadicArgumentTuple,
+                };
                 let cause = self.cause(code);
                 traits::Obligation::with_depth(
                     self.tcx(),
@@ -781,8 +789,8 @@ impl<'a, 'tcx> TypeVisitor<TyCtxt<'tcx>> for WfPredicates<'a, 'tcx> {
                 // Simple cases that are WF if their type args are WF.
             }
 
-            ty::Alias(ty::Projection | ty::Opaque | ty::Free, data) => {
-                let obligations = self.nominal_obligations(data.ctor.expect_def(), data.args);
+            ty::Alias(ty::Projection | ty::Opaque | ty::Free | ty::Variadic, data) => {
+                let obligations = self.nominal_obligations(data.ctor, data.args);
                 self.out.extend(obligations);
             }
             ty::Alias(ty::Inherent, data) => {

@@ -223,12 +223,22 @@ pub trait Safety<I: Interner<Safety = Self>>: Copy + Debug + Hash + Eq {
 }
 
 pub trait AliasCtor<I: Interner<AliasCtor = Self>>:
-    Copy + Debug + Hash + Eq + From<I::DefId> + TypeFoldable<I> + TypeVisitable<I>
+    Copy
+    + Debug
+    + Hash
+    + Eq
+    + From<I::DefId>
+    + From<I::VariadicAliasCtor>
+    + TypeFoldable<I>
+    + TypeVisitable<I>
+    + IntoKind<Kind = ty::AliasCtorKind<I>>
 {
     fn expect_def(self) -> I::DefId;
+    fn expect_variadic(self) -> I::VariadicAliasCtor;
     fn def(self) -> Option<I::DefId>;
     fn span(self, cx: I) -> I::Span;
 
+    fn variances(self, cx: I) -> impl Iterator<Item = ty::Variance>;
     fn bounds(self, cx: I) -> ty::EarlyBinder<I, impl Iterator<Item = I::Clause>>;
     fn self_bounds(self, cx: I) -> ty::EarlyBinder<I, impl Iterator<Item = I::Clause>>;
     fn non_self_bounds(self, cx: I) -> ty::EarlyBinder<I, impl Iterator<Item = I::Clause>>;
@@ -242,6 +252,21 @@ pub trait AliasCtor<I: Interner<AliasCtor = Self>>:
     ) -> ty::EarlyBinder<I, impl Iterator<Item = ty::Binder<I, ty::TraitRef<I>>>>;
 }
 
+pub trait VariadicAliasCtor<I: Interner<VariadicAliasCtor = Self>>:
+    Copy + Debug + Hash + Eq
+{
+    fn len(self) -> usize;
+
+    fn tuple_params(
+        self,
+    ) -> impl Iterator<Item = ty::TupleParam<I>> + ExactSizeIterator + DoubleEndedIterator;
+
+    fn new(
+        cx: I,
+        span: I::Span,
+        params: impl IntoIterator<Item = ty::TupleParam<I>>,
+    ) -> I::VariadicAliasCtor;
+}
 pub trait Region<I: Interner<Region = Self>>:
     Copy
     + Debug

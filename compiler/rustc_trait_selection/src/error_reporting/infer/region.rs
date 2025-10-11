@@ -718,6 +718,7 @@ impl<'a, 'tcx> TypeErrCtxt<'a, 'tcx> {
                 }
                 ty::Free => format!("the type alias `{bound_kind}`"),
                 ty::Opaque => format!("the opaque type `{bound_kind}`"),
+                ty::Variadic => format!("the variadic tuple `{bound_kind}`"),
             },
         };
 

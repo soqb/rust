@@ -1131,6 +1131,14 @@ pub enum Term {
     Constant(Constant),
 }
 
+/// An argument into a variadic tuple (either `T` or `..T`).
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TupleArgument {
+    #[serde(rename = "type")]
+    pub type_: Type,
+    pub is_unpacked: bool,
+}
+
 /// A type.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1147,6 +1155,8 @@ pub enum Type {
     FunctionPointer(Box<FunctionPointer>),
     /// A tuple type, e.g. `(String, u32, Box<usize>)`
     Tuple(Vec<Type>),
+    /// A variadic tuple type, e.g. `(..(String, u32), Box<usize>)`
+    VariadicTuple(Vec<TupleArgument>),
     /// An unsized slice type, e.g. `[u32]`.
     Slice(Box<Type>),
     /// An array type, e.g. `[u32; 15]`

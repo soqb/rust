@@ -77,13 +77,14 @@ use crate::traits::solve::{
     self, CanonicalInput, ExternalConstraints, ExternalConstraintsData, PredefinedOpaques,
     QueryResult, inspect,
 };
+use crate::ty::alias::VariadicAliasCtorStorage;
 use crate::ty::predicate::ExistentialPredicateStableCmpExt as _;
 use crate::ty::{
     self, AdtDef, AdtDefData, AdtKind, Binder, Clause, Clauses, Const, GenericArg, GenericArgs,
     GenericArgsRef, GenericParamDefKind, List, ListWithCachedTypeInfo, ParamConst, ParamTy,
     Pattern, PatternKind, PolyExistentialPredicate, PolyFnSig, Predicate, PredicateKind,
     PredicatePolarity, Region, RegionKind, ReprOptions, TraitObjectVisitor, Ty, TyKind, TyVid,
-    ValTree, ValTreeKind, Visibility,
+    ValTree, ValTreeKind, VariadicAliasCtor, Visibility,
 };
 
 #[allow(rustc::usage_of_ty_tykind)]
@@ -158,6 +159,7 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
     type Safety = hir::Safety;
     type Abi = ExternAbi;
     type AliasCtor = ty::AliasCtor<'tcx>;
+    type VariadicAliasCtor = ty::VariadicAliasCtor<'tcx>;
 
     type Const = ty::Const<'tcx>;
     type PlaceholderConst = ty::PlaceholderConst;
@@ -251,45 +253,49 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
     }
 
     fn alias_ty_kind(self, alias: ty::AliasTy<'tcx>) -> ty::AliasTyKind {
-        let ty::AliasCtor::Def(def_id) = alias.ctor;
-        match self.def_kind(def_id) {
-            DefKind::AssocTy => {
-                if let DefKind::Impl { of_trait: false } = self.def_kind(self.parent(def_id)) {
-                    ty::Inherent
-                } else {
-                    ty::Projection
+        match alias.ctor.kind() {
+            ty::AliasCtorKind::Def(def_id) => match self.def_kind(def_id) {
+                DefKind::AssocTy => {
+                    if let DefKind::Impl { of_trait: false } = self.def_kind(self.parent(def_id)) {
+                        ty::Inherent
+                    } else {
+                        ty::Projection
+                    }
                 }
-            }
-            DefKind::OpaqueTy => ty::Opaque,
-            DefKind::TyAlias => ty::Free,
-            kind => bug!("unexpected DefKind in AliasTy: {kind:?}"),
+                DefKind::OpaqueTy => ty::Opaque,
+                DefKind::TyAlias => ty::Free,
+                kind => bug!("unexpected DefKind in AliasTy: {kind:?}"),
+            },
+            ty::AliasCtorKind::Variadic(_) => ty::Variadic,
         }
     }
 
     fn alias_term_kind(self, alias: ty::AliasTerm<'tcx>) -> ty::AliasTermKind {
-        let ty::AliasCtor::Def(def_id) = alias.ctor;
-        match self.def_kind(def_id) {
-            DefKind::AssocTy => {
-                if let DefKind::Impl { of_trait: false } = self.def_kind(self.parent(def_id)) {
-                    ty::AliasTermKind::InherentTy
-                } else {
-                    ty::AliasTermKind::ProjectionTy
+        match alias.ctor.kind() {
+            ty::AliasCtorKind::Def(def_id) => match self.def_kind(def_id) {
+                DefKind::AssocTy => {
+                    if let DefKind::Impl { of_trait: false } = self.def_kind(self.parent(def_id)) {
+                        ty::AliasTermKind::InherentTy
+                    } else {
+                        ty::AliasTermKind::ProjectionTy
+                    }
                 }
-            }
-            DefKind::AssocConst => {
-                if let DefKind::Impl { of_trait: false } = self.def_kind(self.parent(def_id)) {
-                    ty::AliasTermKind::InherentConst
-                } else {
-                    ty::AliasTermKind::ProjectionConst
+                DefKind::AssocConst => {
+                    if let DefKind::Impl { of_trait: false } = self.def_kind(self.parent(def_id)) {
+                        ty::AliasTermKind::InherentConst
+                    } else {
+                        ty::AliasTermKind::ProjectionConst
+                    }
                 }
-            }
-            DefKind::OpaqueTy => ty::AliasTermKind::OpaqueTy,
-            DefKind::TyAlias => ty::AliasTermKind::FreeTy,
-            DefKind::Const => ty::AliasTermKind::FreeConst,
-            DefKind::AnonConst | DefKind::Ctor(_, CtorKind::Const) => {
-                ty::AliasTermKind::UnevaluatedConst
-            }
-            kind => bug!("unexpected DefKind in AliasTy: {kind:?}"),
+                DefKind::OpaqueTy => ty::AliasTermKind::OpaqueTy,
+                DefKind::TyAlias => ty::AliasTermKind::FreeTy,
+                DefKind::Const => ty::AliasTermKind::FreeConst,
+                DefKind::AnonConst | DefKind::Ctor(_, CtorKind::Const) => {
+                    ty::AliasTermKind::UnevaluatedConst
+                }
+                kind => bug!("unexpected DefKind in AliasTy: {kind:?}"),
+            },
+            ty::AliasCtorKind::Variadic(_) => ty::AliasTermKind::VariadicTy,
         }
     }
 
@@ -341,7 +347,7 @@ impl<'tcx> Interner for TyCtxt<'tcx> {
         // to avoid needing to reintern the set of args...
         if cfg!(debug_assertions) {
             self.debug_assert_args_compatible(
-                ty::AliasCtor::Def(def_id),
+                def_id,
                 self.mk_args_from_iter(
                     [self.types.trait_object_dummy_self.into()].into_iter().chain(args.iter()),
                 ),
@@ -956,6 +962,7 @@ pub struct CtxtInterners<'tcx> {
     valtree: InternedSet<'tcx, ty::ValTreeKind<'tcx>>,
     patterns: InternedSet<'tcx, List<ty::Pattern<'tcx>>>,
     outlives: InternedSet<'tcx, List<ty::ArgOutlivesPredicate<'tcx>>>,
+    variadic_alias_ctor: InternedSet<'tcx, VariadicAliasCtorStorage<'tcx>>,
 }
 
 impl<'tcx> CtxtInterners<'tcx> {
@@ -994,6 +1001,7 @@ impl<'tcx> CtxtInterners<'tcx> {
             valtree: InternedSet::with_capacity(N),
             patterns: InternedSet::with_capacity(N),
             outlives: InternedSet::with_capacity(N),
+            variadic_alias_ctor: InternedSet::with_capacity(N / 2),
         }
     }
 
@@ -2531,6 +2539,7 @@ nop_lift! { predicate; Predicate<'a> => Predicate<'tcx> }
 nop_lift! { predicate; Clause<'a> => Clause<'tcx> }
 nop_lift! { layout; Layout<'a> => Layout<'tcx> }
 nop_lift! { valtree; ValTree<'a> => ValTree<'tcx> }
+nop_lift! { variadic_alias_ctor; VariadicAliasCtor<'a> => VariadicAliasCtor<'tcx> }
 
 nop_list_lift! { type_lists; Ty<'a> => Ty<'tcx> }
 nop_list_lift! {
@@ -2788,6 +2797,7 @@ macro_rules! direct_interners {
 direct_interners! {
     region: pub(crate) intern_region(RegionKind<'tcx>): Region -> Region<'tcx>,
     valtree: pub(crate) intern_valtree(ValTreeKind<'tcx>): ValTree -> ValTree<'tcx>,
+    variadic_alias_ctor: pub(crate) intern_variadic_alias_ctor(VariadicAliasCtorStorage<'tcx>): VariadicAliasCtor -> VariadicAliasCtor<'tcx>,
     pat: pub mk_pat(PatternKind<'tcx>): Pattern -> Pattern<'tcx>,
     const_allocation: pub mk_const_alloc(Allocation): ConstAllocation -> ConstAllocation<'tcx>,
     layout: pub mk_layout(LayoutData<FieldIdx, VariantIdx>): Layout -> Layout<'tcx>,
@@ -2904,36 +2914,38 @@ impl<'tcx> TyCtxt<'tcx> {
         if pred.kind() != binder { self.mk_predicate(binder) } else { pred }
     }
 
-    pub fn check_args_compatible(self, def_id: DefId, args: &'tcx [ty::GenericArg<'tcx>]) -> bool {
-        self.check_args_compatible_inner(def_id, args, false)
+    pub fn check_args_compatible(
+        self,
+        ctor: impl Into<ty::AliasCtor<'tcx>>,
+        args: &'tcx [ty::GenericArg<'tcx>],
+    ) -> bool {
+        self.check_args_compatible_inner(ctor, args, false)
     }
 
-    fn check_args_compatible_inner(
+    fn slice_args_for_def_compatibility(
         self,
         def_id: DefId,
         args: &'tcx [ty::GenericArg<'tcx>],
         nested: bool,
-    ) -> bool {
+    ) -> Option<&'tcx [ty::GenericArg<'tcx>]> {
         let generics = self.generics_of(def_id);
 
-        // IATs themselves have a weird arg setup (self + own args), but nested items *in* IATs
-        // (namely: opaques, i.e. ATPITs) do not.
-        let own_args = if !nested
+        if !nested
             && let DefKind::AssocTy = self.def_kind(def_id)
             && let DefKind::Impl { of_trait: false } = self.def_kind(self.parent(def_id))
         {
             if generics.own_params.len() + 1 != args.len() {
-                return false;
+                return None;
             }
 
             if !matches!(args[0].kind(), ty::GenericArgKind::Type(_)) {
-                return false;
+                return None;
             }
 
-            &args[1..]
+            Some(&args[1..])
         } else {
             if generics.count() != args.len() {
-                return false;
+                return None;
             }
 
             let (parent_args, own_args) = args.split_at(generics.parent_count);
@@ -2941,13 +2953,39 @@ impl<'tcx> TyCtxt<'tcx> {
             if let Some(parent) = generics.parent
                 && !self.check_args_compatible_inner(parent, parent_args, true)
             {
-                return false;
+                return None;
             }
 
-            own_args
+            Some(own_args)
+        }
+    }
+
+    fn check_args_compatible_inner(
+        self,
+        ctor: impl Into<ty::AliasCtor<'tcx>>,
+        args: &'tcx [ty::GenericArg<'tcx>],
+        nested: bool,
+    ) -> bool {
+        let ctor = ctor.into();
+        let own_args = match ctor.kind() {
+            ty::AliasCtorKind::Def(def_id) => {
+                if let Some(args) = self.slice_args_for_def_compatibility(def_id, args, nested) {
+                    args
+                } else {
+                    return false;
+                }
+            }
+
+            ty::AliasCtorKind::Variadic(ctor) => {
+                if nested || args.len() != ctor.len() {
+                    return false;
+                }
+
+                args
+            }
         };
 
-        for (param, arg) in std::iter::zip(&generics.own_params, own_args) {
+        for (param, arg) in std::iter::zip(ctor.generics(self), own_args) {
             match (&param.kind, arg.kind()) {
                 (ty::GenericParamDefKind::Type { .. }, ty::GenericArgKind::Type(_))
                 | (ty::GenericParamDefKind::Lifetime, ty::GenericArgKind::Lifetime(_))
@@ -2966,9 +3004,10 @@ impl<'tcx> TyCtxt<'tcx> {
         ctor: impl Into<ty::AliasCtor<'tcx>>,
         args: &'tcx [ty::GenericArg<'tcx>],
     ) {
-        let ty::AliasCtor::Def(def_id) = ctor.into();
-        if cfg!(debug_assertions) && !self.check_args_compatible(def_id, args) {
-            if let DefKind::AssocTy = self.def_kind(def_id)
+        let ctor = ctor.into();
+        if cfg!(debug_assertions) && !self.check_args_compatible(ctor, args) {
+            if let Some(def_id) = ctor.def()
+                && let DefKind::AssocTy = self.def_kind(def_id)
                 && let DefKind::Impl { of_trait: false } = self.def_kind(self.parent(def_id))
             {
                 bug!(
@@ -2988,9 +3027,9 @@ impl<'tcx> TyCtxt<'tcx> {
             } else {
                 bug!(
                     "args not compatible with generics for {}: args={:#?}, generics={:#?}",
-                    self.def_path_str(def_id),
+                    self.alias_ctor_str(ctor),
                     args,
-                    ty::GenericArgs::identity_for_item(self, def_id)
+                    ctor,
                 );
             }
         }
@@ -3003,7 +3042,7 @@ impl<'tcx> TyCtxt<'tcx> {
         args: impl IntoIterator<Item: Into<GenericArg<'tcx>>>,
     ) -> GenericArgsRef<'tcx> {
         let args = self.mk_args_from_iter(args.into_iter().map(Into::into));
-        self.debug_assert_args_compatible(ty::AliasCtor::Def(def_id), args);
+        self.debug_assert_args_compatible(def_id, args);
         args
     }
 

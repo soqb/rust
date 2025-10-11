@@ -1,0 +1,11 @@
+error[E0119]: conflicting implementations of trait `Foo` for type `(_, ..(_))`
+  --> $DIR/reverse-chirality-impls-should-overlap.rs:9:1
+   |
+LL | impl<T, R: Tuple> Foo for (T, ..R) {}
+   | ---------------------------------- first implementation here
+LL | impl<T, R: Tuple> Foo for (..R, T) {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ conflicting implementation for `(_, ..(_))`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0119`.

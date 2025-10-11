@@ -660,7 +660,7 @@ impl<T> Trait<T> for X {
             let point_at_assoc_fn = if callable_scope
                 && self.point_at_methods_that_satisfy_associated_type(
                     diag,
-                    tcx.parent(proj_ty.def_id),
+                    tcx.parent(proj_ty.ctor.expect_def()),
                     current_method_ident,
                     def_id,
                     values.expected,

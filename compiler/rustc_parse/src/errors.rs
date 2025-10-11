@@ -3041,6 +3041,13 @@ pub(crate) struct InvalidCVariadicType {
 }
 
 #[derive(Diagnostic)]
+#[diag(parse_invalid_tuple_unpacking)]
+pub(crate) struct InvalidTupleUnpacking {
+    #[primary_span]
+    pub span: Span,
+}
+
+#[derive(Diagnostic)]
 #[diag(parse_invalid_dyn_keyword)]
 #[help]
 pub(crate) struct InvalidDynKeyword {

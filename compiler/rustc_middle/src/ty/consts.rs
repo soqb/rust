@@ -113,7 +113,7 @@ impl<'tcx> Const<'tcx> {
 
     #[inline]
     pub fn new_unevaluated(tcx: TyCtxt<'tcx>, uv: ty::UnevaluatedConst<'tcx>) -> Const<'tcx> {
-        tcx.debug_assert_args_compatible(ty::AliasCtor::Def(uv.def), uv.args);
+        tcx.debug_assert_args_compatible(uv.def, uv.args);
         Const::new(tcx, ty::ConstKind::Unevaluated(uv))
     }
 

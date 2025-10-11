@@ -2200,13 +2200,13 @@ fn simplify_fn_type<'a, 'tcx>(
             );
             res.push(get_index_type(arg, ty_generics, rgen));
         }
-        Type::Tuple(ref tys) => {
+        Type::Tuple(ref args) => {
             let mut ty_generics = Vec::new();
-            for ty in tys {
+            for arg in args {
                 simplify_fn_type(
                     self_,
                     generics,
-                    ty,
+                    &arg.ty,
                     tcx,
                     recurse + 1,
                     &mut ty_generics,

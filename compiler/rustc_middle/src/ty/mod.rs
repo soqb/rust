@@ -67,7 +67,10 @@ use tracing::{debug, instrument, trace};
 pub use vtable::*;
 use {rustc_ast as ast, rustc_hir as hir};
 
-pub use self::alias::{AliasCtor, AliasTyInstExt, GenericAliasParamDef};
+pub use self::alias::{
+    AliasCtor, AliasTermInstExt, AliasTyInstExt, GenericAliasParamDef, VariadicAliasCtor,
+    VariadicAliasCtorStorage,
+};
 pub use self::closure::{
     BorrowKind, CAPTURE_STRUCT_LOCAL, CaptureInfo, CapturedPlace, ClosureTypeInfo,
     MinCaptureInformationMap, MinCaptureList, RootVariableMinCaptureList, UpvarCapture, UpvarId,
@@ -102,9 +105,10 @@ pub use self::region::{
 };
 pub use self::rvalue_scopes::RvalueScopes;
 pub use self::sty::{
-    AliasTy, Article, Binder, BoundTy, BoundTyKind, BoundVariableKind, CanonicalPolyFnSig,
-    CoroutineArgsExt, EarlyBinder, FnSig, InlineConstArgs, InlineConstArgsParts, ParamConst,
-    ParamTy, PolyFnSig, TyKind, TypeAndMut, TypingMode, UpvarArgs,
+    AliasCtorKind, AliasTy, Article, Binder, BoundTy, BoundTyKind, BoundVariableKind,
+    CanonicalPolyFnSig, CoroutineArgsExt, EarlyBinder, FnSig, InlineConstArgs,
+    InlineConstArgsParts, ParamConst, ParamTy, PolyFnSig, TupleParam, TyKind, TypeAndMut,
+    TypingMode, UpvarArgs,
 };
 pub use self::trait_def::TraitDef;
 pub use self::typeck_results::{
@@ -443,14 +447,6 @@ impl<'tcx> rustc_type_ir::Flags for Ty<'tcx> {
 
     fn outer_exclusive_binder(&self) -> DebruijnIndex {
         self.0.outer_exclusive_binder
-    }
-}
-
-impl EarlyParamRegion {
-    /// Does this early bound region have a name? Early bound regions normally
-    /// always have names except when using anonymous lifetimes (`'_`).
-    pub fn is_named(&self) -> bool {
-        self.name != kw::UnderscoreLifetime
     }
 }
 

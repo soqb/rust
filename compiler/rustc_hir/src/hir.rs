@@ -3695,6 +3695,21 @@ pub enum InferDelegationKind {
     Output,
 }
 
+#[derive(Debug, Clone, Copy, HashStable_Generic)]
+pub enum TupleArg<'hir> {
+    Inline(&'hir Ty<'hir>),
+    Unpacked(&'hir Ty<'hir>),
+}
+
+impl<'hir> TupleArg<'hir> {
+    pub fn ty(&self) -> &'hir Ty<'hir> {
+        match self {
+            TupleArg::Inline(ty) => ty,
+            TupleArg::Unpacked(ty) => ty,
+        }
+    }
+}
+
 /// The various kinds of types recognized by the compiler.
 ///
 /// For an explanation of the `Unambig` generic parameter see the dev-guide:
@@ -3719,8 +3734,10 @@ pub enum TyKind<'hir, Unambig = ()> {
     UnsafeBinder(&'hir UnsafeBinderTy<'hir>),
     /// The never type (`!`).
     Never,
-    /// A tuple (`(A, B, C, D, ...)`).
+    /// A tuple (`(A, B, C, D)`).
     Tup(&'hir [Ty<'hir>]),
+    /// A variadic tuple (`(A, ..B, ..C, D)`).
+    VariadicTup(&'hir [TupleArg<'hir>]),
     /// A path to a type definition (`module::module::...::Type`), or an
     /// associated type (e.g., `<Vec<T> as Trait>::Type` or `<T>::Target`).
     ///

@@ -51,14 +51,24 @@ impl<'tcx> TypeError<'tcx> {
             TypeError::ArgumentMutability(_) | TypeError::Mutability => {
                 "types differ in mutability".into()
             }
-            TypeError::TupleSize(values) => format!(
-                "expected a tuple with {} element{}, found one with {} element{}",
-                values.expected,
-                pluralize!(values.expected),
-                values.found,
-                pluralize!(values.found)
-            )
-            .into(),
+            TypeError::TupleArity(values) => {
+                // Asymmetric error messages make arity information slightly easier to parse:
+                // "expected a tuple with at least 4 elements, found one with only 2 elements"
+                // "expected a tuple with 2 elements, found one with 4 or more elements"
+                let (ex_qual, ex_n, ex_s) = match values.expected {
+                    ty::TupleArity::Fixed(n) => ("", n, pluralize!(n)),
+                    ty::TupleArity::Variadic { min: n } => ("at least ", n, pluralize!(n)),
+                };
+                let (fd_qual, fd_n, fd_noun, fd_s) = match values.found {
+                    ty::TupleArity::Fixed(n) => ("only ", n, "element", pluralize!(n)),
+                    ty::TupleArity::Variadic { min: n } => ("", n, "or more element", "s"),
+                };
+                format!(
+                    "expected a tuple with {ex_qual}{ex_n} element{ex_s}, \
+                    found one with {fd_qual}{fd_n} {fd_noun}{fd_s}"
+                )
+                .into()
+            }
             TypeError::ArraySize(values) => format!(
                 "expected an array with a size of {}, found one with a size of {}",
                 values.expected, values.found,
@@ -213,6 +223,7 @@ impl<'tcx> Ty<'tcx> {
             ty::Alias(ty::Free, _) => "type alias".into(),
             ty::Param(_) => "type parameter".into(),
             ty::Alias(ty::Opaque, ..) => "opaque type".into(),
+            ty::Alias(ty::Variadic, ..) => "variadic tuple".into(),
         }
     }
 }

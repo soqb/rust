@@ -13,7 +13,7 @@ use rustc_middle::traits::select::OverflowError;
 use rustc_middle::traits::{BuiltinImplSource, ImplSource, ImplSourceUserDefinedData};
 use rustc_middle::ty::fast_reject::DeepRejectCtxt;
 use rustc_middle::ty::{
-    self, Term, Ty, TyCtxt, TypeFoldable, TypeVisitableExt, TypingMode, Upcast,
+    self, AliasTermInstExt, Term, Ty, TyCtxt, TypeFoldable, TypeVisitableExt, TypingMode, Upcast,
 };
 use rustc_middle::{bug, span_bug};
 use rustc_span::sym;
@@ -471,6 +471,10 @@ fn normalize_to_error<'a, 'tcx>(
         | ty::AliasTermKind::InherentConst
         | ty::AliasTermKind::UnevaluatedConst
         | ty::AliasTermKind::ProjectionConst => selcx.infcx.next_const_var(cause.span).into(),
+        ty::AliasTermKind::VariadicTy => span_bug!(
+            projection_term.ctor.expect_variadic().span(),
+            "variadic aliases only supported by the new solver",
+        ),
     };
     let mut obligations = PredicateObligations::new();
     obligations.push(Obligation {
@@ -1819,9 +1823,11 @@ fn confirm_async_closure_candidate<'cx, 'tcx>(
                 name => bug!("no such associated type: {name}"),
             };
             let projection_term = match item_name {
-                sym::CallOnceFuture | sym::Output => {
-                    ty::AliasTerm::new(tcx, obligation.predicate.ctor, [self_ty, Ty::new_tup(tcx, sig.inputs())])
-                }
+                sym::CallOnceFuture | sym::Output => ty::AliasTerm::new(
+                    tcx,
+                    obligation.predicate.ctor,
+                    [self_ty, Ty::new_tup(tcx, sig.inputs())],
+                ),
                 sym::CallRefFuture => ty::AliasTerm::new(
                     tcx,
                     obligation.predicate.ctor,
@@ -2079,8 +2085,7 @@ fn assoc_term_own_obligations<'cx, 'tcx>(
     nested: &mut PredicateObligations<'tcx>,
 ) {
     let tcx = selcx.tcx();
-    let predicates =
-        obligation.predicate.ctor.predicates(tcx).instantiate_own(tcx, obligation.predicate.args);
+    let predicates = obligation.predicate.instantiate_own_predicates(tcx);
     for (predicate, span) in predicates {
         let normalized = normalize_with_depth_to(
             selcx,

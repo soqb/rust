@@ -1308,6 +1308,13 @@ pub(crate) struct PolyTrait {
     pub(crate) generic_params: Vec<GenericParamDef>,
 }
 
+/// A possibly unpacked tuple argument.
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+pub(crate) struct TupleArgument {
+    pub(crate) ty: Type,
+    pub(crate) is_unpacked: bool,
+}
+
 /// Rustdoc's representation of types, mostly based on the [`hir::Ty`].
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub(crate) enum Type {
@@ -1329,7 +1336,7 @@ pub(crate) enum Type {
     /// A function pointer: `extern "ABI" fn(...) -> ...`
     BareFunction(Box<BareFunctionDecl>),
     /// A tuple type: `(i32, &str)`.
-    Tuple(Vec<Type>),
+    Tuple(Vec<TupleArgument>),
     /// A slice type (does *not* include the `&`): `[i32]`
     Slice(Box<Type>),
     /// An array type.
@@ -1414,10 +1421,42 @@ impl Type {
             return true;
         }
 
+        /// Handles the unpacked middles of tuples.
+        ///
+        /// Returns in the first pair the common leftmost inline arguments,
+        /// and in the second pair the common rightmost inline arguments.
+        fn slice_tuples<'a>(
+            a: &'a [TupleArgument],
+            b: &'a [TupleArgument],
+        ) -> Option<[&'a [TupleArgument]; 4]> {
+            let a_left = a.iter().position(|arg| arg.is_unpacked);
+            let b_left = b.iter().position(|arg| arg.is_unpacked);
+            let left = match (a_left, b_left) {
+                (Some(n), Some(m)) => usize::min(n, m),
+                (Some(n), None) | (None, Some(n)) => n,
+                (None, None) if a.len() == b.len() => return Some([a, b, &[], &[]]),
+                (None, None) => return None,
+            };
+
+            let a_right = a.iter().rposition(|arg| arg.is_unpacked).map(|i| a.len() - i);
+            let b_right = b.iter().rposition(|arg| arg.is_unpacked).map(|i| b.len() - i);
+            let right = match (a_right, b_right) {
+                (Some(n), Some(m)) => usize::max(n, m),
+                (Some(n), None) | (None, Some(n)) => n,
+                (None, None) => unreachable!(),
+            };
+
+            Some([&a[..left], &b[..left], &a[a.len() - right..], &b[b.len() - right..]])
+        }
+
         match (self_cleared, other_cleared) {
             // Recursive cases.
             (Type::Tuple(a), Type::Tuple(b)) => {
-                a.iter().eq_by(b, |a, b| a.is_doc_subtype_of(b, cache))
+                let Some([la, lb, ra, rb]) = slice_tuples(a, b) else {
+                    return false;
+                };
+                std::iter::zip(la, lb).all(|(a, b)| a.ty.is_doc_subtype_of(&b.ty, cache))
+                    && std::iter::zip(ra, rb).all(|(a, b)| a.ty.is_doc_subtype_of(&b.ty, cache))
             }
             (Type::Slice(a), Type::Slice(b)) => a.is_doc_subtype_of(b, cache),
             (Type::Array(a, al), Type::Array(b, bl)) => al == bl && a.is_doc_subtype_of(b, cache),

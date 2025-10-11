@@ -1,4 +1,4 @@
-use std::iter;
+use std::iter::{self, repeat_n};
 
 use derive_where::derive_where;
 use rustc_ast_ir::Mutability;
@@ -85,7 +85,14 @@ pub trait TypeRelation<I: Interner>: Sized {
     ) -> RelateResult<I, I::GenericArgs> {
         let cx = self.cx();
         let opt_variances = cx.variances_of(item_def_id);
-        relate_args_with_variances(self, item_def_id.into(), opt_variances, a_arg, b_arg, true)
+        relate_args_with_variances(
+            self,
+            item_def_id.into(),
+            opt_variances.iter(),
+            a_arg,
+            b_arg,
+            true,
+        )
     }
 
     /// Switch variance for the purpose of relating `a` and `b`.
@@ -139,7 +146,7 @@ pub fn relate_args_invariantly<I: Interner, R: TypeRelation<I>>(
 pub fn relate_args_with_variances<I: Interner, R: TypeRelation<I>>(
     relation: &mut R,
     ctor: I::AliasCtor,
-    variances: I::VariancesOf,
+    variances: impl Iterator<Item = ty::Variance>,
     a_arg: I::GenericArgs,
     b_arg: I::GenericArgs,
     fetch_ty_for_diag: bool,
@@ -148,17 +155,18 @@ pub fn relate_args_with_variances<I: Interner, R: TypeRelation<I>>(
 
     let fetch_ty_for_diag = fetch_ty_for_diag && ctor.def().is_some();
     let mut cached_ty = None;
-    let params = iter::zip(a_arg.iter(), b_arg.iter()).enumerate().map(|(i, (a, b))| {
-        let variance = variances.get(i).unwrap();
-        let variance_info = if variance == ty::Invariant && fetch_ty_for_diag {
-            let ty = *cached_ty
-                .get_or_insert_with(|| cx.type_of(ctor.expect_def()).instantiate(cx, a_arg));
-            VarianceDiagInfo::Invariant { ty, param_index: i.try_into().unwrap() }
-        } else {
-            VarianceDiagInfo::default()
-        };
-        relation.relate_with_variance(variance, variance_info, a, b)
-    });
+    let params = iter::zip(variances, iter::zip(a_arg.iter(), b_arg.iter())).enumerate().map(
+        |(i, (variance, (a, b)))| {
+            let variance_info = if variance == ty::Invariant && fetch_ty_for_diag {
+                let ty = *cached_ty
+                    .get_or_insert_with(|| cx.type_of(ctor.expect_def()).instantiate(cx, a_arg));
+                VarianceDiagInfo::Invariant { ty, param_index: i.try_into().unwrap() }
+            } else {
+                VarianceDiagInfo::default()
+            };
+            relation.relate_with_variance(variance, variance_info, a, b)
+        },
+    );
 
     cx.mk_args_from_iter(params)
 }
@@ -243,7 +251,11 @@ impl<I: Interner> Relate<I> for ty::AliasTy<I> {
             let cx = relation.cx();
             let args = if let Some(variances) = cx.opt_alias_variances(a.kind(cx), a.ctor) {
                 relate_args_with_variances(
-                    relation, a.ctor, variances, a.args, b.args,
+                    relation,
+                    a.ctor,
+                    variances.iter(),
+                    a.args,
+                    b.args,
                     false, // do not fetch `type_of(a_def_id)`, as it will cause a cycle
                 )?
             } else {
@@ -268,14 +280,16 @@ impl<I: Interner> Relate<I> for ty::AliasTerm<I> {
             }))
         } else {
             let args = match a.kind(relation.cx()) {
-                ty::AliasTermKind::OpaqueTy => relate_args_with_variances(
-                    relation,
-                    a.ctor,
-                    relation.cx().variances_of(a.ctor.expect_def()),
-                    a.args,
-                    b.args,
-                    false, // do not fetch `type_of(a_def_id)`, as it will cause a cycle
-                )?,
+                ty::AliasTermKind::OpaqueTy | ty::AliasTermKind::VariadicTy => {
+                    relate_args_with_variances(
+                        relation,
+                        a.ctor,
+                        a.ctor.variances(relation.cx()),
+                        a.args,
+                        b.args,
+                        false, // do not fetch `type_of(a_def_id)`, as it will cause a cycle
+                    )?
+                }
                 ty::AliasTermKind::ProjectionTy
                 | ty::AliasTermKind::FreeConst
                 | ty::AliasTermKind::FreeTy
@@ -511,7 +525,10 @@ pub fn structurally_relate_tys<I: Interner, R: TypeRelation<I>>(
                     iter::zip(as_.iter(), bs.iter()).map(|(a, b)| relation.relate(a, b)),
                 )?)
             } else if !(as_.is_empty() || bs.is_empty()) {
-                Err(TypeError::TupleSize(ExpectedFound::new(as_.len(), bs.len())))
+                Err(TypeError::TupleArity(ExpectedFound::new(
+                    ty::TupleArity::Fixed(as_.len()),
+                    ty::TupleArity::Fixed(bs.len()),
+                )))
             } else {
                 Err(TypeError::Sorts(ExpectedFound::new(a, b)))
             }
@@ -532,6 +549,23 @@ pub fn structurally_relate_tys<I: Interner, R: TypeRelation<I>>(
         }
 
         // Alias tend to mostly already be handled downstream due to normalization.
+        (ty::Alias(ty::Variadic, a_data), ty::Alias(ty::Variadic, b_data)) => {
+            let a_ctor = a_data.ctor.expect_variadic();
+            let b_ctor = b_data.ctor.expect_variadic();
+            structurally_relate_tuple_contents(
+                relation,
+                (a_ctor, a_data.args),
+                (b_ctor, b_data.args),
+            )
+        }
+        (ty::Alias(ty::Variadic, a_data), ty::Tuple(b_tys)) => {
+            let a_ctor = a_data.ctor.expect_variadic();
+            structurally_relate_tuple_contents(relation, (a_ctor, a_data.args), (b_tys,))
+        }
+        (ty::Tuple(a_tys), ty::Alias(ty::Variadic, b_data)) => {
+            let b_ctor = b_data.ctor.expect_variadic();
+            structurally_relate_tuple_contents(relation, (a_tys,), (b_ctor, b_data.args))
+        }
         (ty::Alias(a_kind, a_data), ty::Alias(b_kind, b_data)) => {
             let alias_ty = relation.relate(a_data, b_data)?;
             assert_eq!(a_kind, b_kind);
@@ -654,4 +688,148 @@ impl<I: Interner> Relate<I> for ty::TraitPredicate<I> {
         }
         Ok(ty::TraitPredicate { trait_ref, polarity: a.polarity })
     }
+}
+
+trait TupleLike<I: Interner>: Copy + std::fmt::Debug {
+    fn left_count(self) -> usize;
+    fn right_count(self) -> usize;
+    fn arity(self, n: usize, m: usize) -> ty::TupleArity;
+    fn nth_left(self, i: usize) -> I::Ty;
+    fn nth_right(self, i: usize) -> I::Ty;
+    fn bundle_between(self, cx: I, n: usize, m: usize) -> I::Ty;
+    fn to_ty(self, cx: I) -> I::Ty;
+}
+
+impl<I: Interner> TupleLike<I> for (I::Tys,) {
+    fn left_count(self) -> usize {
+        self.0.len()
+    }
+    fn right_count(self) -> usize {
+        self.0.len()
+    }
+    fn arity(self, _n: usize, _m: usize) -> ty::TupleArity {
+        ty::TupleArity::Fixed(self.0.len())
+    }
+    fn nth_left(self, i: usize) -> I::Ty {
+        self.0.as_slice()[i]
+    }
+    fn nth_right(self, i: usize) -> I::Ty {
+        self.0.as_slice()[self.0.len() - i]
+    }
+    fn bundle_between(self, cx: I, n: usize, m: usize) -> I::Ty {
+        Ty::new_tup(cx, &self.0.as_slice()[n..self.0.len() - m])
+    }
+    fn to_ty(self, cx: I) -> I::Ty {
+        Ty::new_tup(cx, self.0.as_slice())
+    }
+}
+
+impl<I: Interner> TupleLike<I> for (I::VariadicAliasCtor, I::GenericArgs) {
+    fn left_count(self) -> usize {
+        self.0
+            .tuple_params()
+            .position(|param| param.is_unpacked())
+            .unwrap()
+    }
+    fn right_count(self) -> usize {
+        self.0
+            .tuple_params()
+            .rev()
+            .position(|param| param.is_unpacked())
+            .unwrap()
+    }
+    fn arity(self, n: usize, m: usize) -> ty::TupleArity {
+        let others = self
+            .0
+            .tuple_params()
+            .skip(n)
+            .take(self.1.len() - n - m)
+            .filter(|param| param.is_inline())
+            .count();
+        ty::TupleArity::Variadic { min: n + m + others }
+    }
+    fn nth_left(self, i: usize) -> I::Ty {
+        self.1.as_slice()[i].expect_ty()
+    }
+    fn nth_right(self, i: usize) -> I::Ty {
+        self.1.as_slice()[self.1.len() - i].expect_ty()
+    }
+    fn bundle_between(self, cx: I, n: usize, m: usize) -> I::Ty {
+        match &self.1.as_slice()[n..self.1.len() - m] {
+            [one] => one.expect_ty(),
+            many => {
+                let params = self.0.tuple_params().skip(n).take(self.1.len() - n - m);
+                let ctor = I::VariadicAliasCtor::new(cx, I::Span::dummy(), params);
+                let args = cx.mk_args(many);
+                ty::AliasTy::new_from_args(cx, ctor.into(), args).to_ty(cx)
+            }
+        }
+    }
+
+    fn to_ty(self, cx: I) -> I::Ty {
+        ty::AliasTy::new_from_args(cx, self.0.into(), self.1).to_ty(cx)
+    }
+}
+
+fn structurally_relate_tuple_contents<I: Interner, R: TypeRelation<I>>(
+    relation: &mut R,
+    a: impl TupleLike<I>,
+    b: impl TupleLike<I>,
+) -> RelateResult<I, I::Ty>
+where
+    I: Interner,
+{
+    let cx = relation.cx();
+
+    let left = usize::min(a.left_count(), b.left_count());
+    let right = usize::min(a.right_count(), b.right_count());
+
+    trace!(
+        "structurally_relate_tuple_contents left={left}, right={right}, a_arity = {a:?}, b_arity = {b:?}",
+        a = a.arity(left, right),
+        b = b.arity(left, right),
+    );
+
+
+    match (a.arity(left, right), b.arity(left, right)) {
+        (
+            ty::TupleArity::Fixed(0),
+            ty::TupleArity::Fixed(1..) | ty::TupleArity::Variadic { min: 1.. },
+        )
+        | (
+            ty::TupleArity::Fixed(1..) | ty::TupleArity::Variadic { min: 1.. },
+            ty::TupleArity::Fixed(0),
+        ) => return Err(TypeError::Sorts(ExpectedFound::new(a.to_ty(cx), b.to_ty(cx)))),
+        (a @ ty::TupleArity::Fixed(n), b @ ty::TupleArity::Variadic { min: m })
+        | (a @ ty::TupleArity::Variadic { min: m }, b @ ty::TupleArity::Fixed(n))
+            if n < m =>
+        {
+            return Err(TypeError::TupleArity(ExpectedFound::new(a, b)));
+        }
+        _ => (),
+    }
+
+    let sum = left + right + 1;
+    let args = (0..sum)
+        .map(|i| {
+            if i < left {
+                relation.relate(a.nth_left(i), b.nth_left(i))
+            } else if i == left {
+                relation
+                    .relate(a.bundle_between(cx, left, right), b.bundle_between(cx, left, right))
+            } else {
+                relation.relate(a.nth_right(sum - i), b.nth_right(sum - i))
+            }
+        })
+        .map(|res| res.map(I::GenericArg::from));
+
+    let ctor = I::VariadicAliasCtor::new(
+        cx,
+        I::Span::dummy(),
+        repeat_n(ty::TupleParam::Inline, left)
+            .chain(Some(ty::TupleParam::Unpacked(I::Span::dummy())))
+            .chain(repeat_n(ty::TupleParam::Inline, right)),
+    );
+    let args = cx.mk_args_from_iter(args)?;
+    Ok(ty::AliasTy::new_from_args(cx, ctor.into(), args).to_ty(cx))
 }

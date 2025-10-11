@@ -360,6 +360,9 @@ pub trait Visitor<'v>: Sized {
     fn visit_generic_arg(&mut self, generic_arg: &'v GenericArg<'v>) -> Self::Result {
         walk_generic_arg(self, generic_arg)
     }
+    fn visit_tuple_arg(&mut self, tuple_arg: &'v TupleArg<'v>) -> Self::Result {
+        walk_tuple_arg(self, tuple_arg)
+    }
 
     /// All types are treated as ambiguous types for the purposes of hir visiting in
     /// order to ensure that visitors can handle infer vars without it being too error-prone.
@@ -974,6 +977,16 @@ pub fn walk_generic_arg<'v, V: Visitor<'v>>(
     }
 }
 
+pub fn walk_tuple_arg<'v, V: Visitor<'v>>(
+    visitor: &mut V,
+    tuple_arg: &'v TupleArg<'v>,
+) -> V::Result {
+    match tuple_arg {
+        TupleArg::Inline(ty) => visitor.visit_ty_unambig(ty),
+        TupleArg::Unpacked(ty) => visitor.visit_ty_unambig(ty),
+    }
+}
+
 pub fn walk_unambig_ty<'v, V: Visitor<'v>>(visitor: &mut V, typ: &'v Ty<'v>) -> V::Result {
     match typ.try_as_ambig_ty() {
         Some(ambig_ty) => visitor.visit_ty(ambig_ty),
@@ -998,6 +1011,9 @@ pub fn walk_ty<'v, V: Visitor<'v>>(visitor: &mut V, typ: &'v Ty<'v, AmbigArg>) -
         TyKind::Never => {}
         TyKind::Tup(tuple_element_types) => {
             walk_list!(visitor, visit_ty_unambig, tuple_element_types);
+        }
+        TyKind::VariadicTup(tuple_element_types) => {
+            walk_list!(visitor, visit_tuple_arg, tuple_element_types);
         }
         TyKind::FnPtr(ref function_declaration) => {
             walk_list!(visitor, visit_generic_param, function_declaration.generic_params);

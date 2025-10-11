@@ -234,6 +234,7 @@ TrivialLiftImpls! {
     rustc_middle::mir::ConstValue,
     rustc_type_ir::BoundConstness,
     rustc_type_ir::PredicatePolarity,
+    rustc_type_ir::TupleArity,
     // tidy-alphabetical-end
 }
 
@@ -327,15 +328,6 @@ impl<'a, 'tcx> Lift<TyCtxt<'tcx>> for Term<'a> {
         match self.kind() {
             TermKind::Ty(ty) => tcx.lift(ty).map(Into::into),
             TermKind::Const(c) => tcx.lift(c).map(Into::into),
-        }
-    }
-}
-
-impl<'a, 'tcx> Lift<TyCtxt<'tcx>> for ty::AliasCtor<'a> {
-    type Lifted = ty::AliasCtor<'tcx>;
-    fn lift_to_interner(self, _tcx: TyCtxt<'tcx>) -> Option<Self::Lifted> {
-        match self {
-            ty::AliasCtor::Def(def_id) => Some(ty::AliasCtor::Def(def_id)),
         }
     }
 }

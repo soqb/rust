@@ -289,6 +289,8 @@ fn type_trailing_braced_mac_call(mut ty: &ast::Ty) -> Option<&ast::MacCall> {
                 }
             }
 
+            ast::TyKind::Unpacked(next) => ty = &next,
+
             ast::TyKind::Slice(..)
             | ast::TyKind::Array(..)
             | ast::TyKind::Never

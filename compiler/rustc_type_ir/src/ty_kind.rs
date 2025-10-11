@@ -37,6 +37,8 @@ pub enum AliasTyKind {
     /// Currently only used if the type alias references opaque types.
     /// Can always be normalized away.
     Free,
+    /// A variadic alias.
+    Variadic,
 }
 
 impl AliasTyKind {
@@ -46,8 +48,44 @@ impl AliasTyKind {
             AliasTyKind::Inherent => "inherent associated type",
             AliasTyKind::Opaque => "opaque type",
             AliasTyKind::Free => "type alias",
+            AliasTyKind::Variadic => "variadic tuple type",
         }
     }
+}
+
+#[derive_where(Debug, Clone, Copy, Hash, PartialEq, Eq; I: Interner)]
+#[cfg_attr(
+    feature = "nightly",
+    derive(Encodable_NoContext, Decodable_NoContext, HashStable_NoContext)
+)]
+pub enum TupleParam<I: Interner> {
+    Inline,
+    Unpacked(I::Span),
+}
+
+impl<I: Interner> TupleParam<I> {
+    pub fn is_unpacked(self) -> bool {
+        matches!(self, TupleParam::Unpacked(_))
+    }
+    pub fn is_inline(self) -> bool {
+        matches!(self, TupleParam::Inline)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum TupleArity {
+    Fixed(usize),
+    Variadic { min: usize },
+}
+
+#[derive_where(Debug, Clone, Copy, Hash, PartialEq, Eq; I: Interner)]
+#[cfg_attr(
+    feature = "nightly",
+    derive(Encodable_NoContext, Decodable_NoContext, HashStable_NoContext)
+)]
+pub enum AliasCtorKind<I: Interner> {
+    Def(I::DefId),
+    Variadic(I::VariadicAliasCtor),
 }
 
 /// Defines the kinds of types used by the type system.
@@ -508,160 +546,6 @@ impl<I: Interner> AliasTy<I> {
         interner: I,
     ) -> impl Iterator<Item = ty::Binder<I, ty::TraitRef<I>>> {
         self.ctor.explicit_implied_const_bounds(interner).iter_instantiated(interner, self.args)
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(
-    feature = "nightly",
-    derive(Encodable_NoContext, Decodable_NoContext, HashStable_NoContext)
-)]
-pub enum IntTy {
-    Isize,
-    I8,
-    I16,
-    I32,
-    I64,
-    I128,
-}
-
-impl IntTy {
-    pub fn name_str(&self) -> &'static str {
-        match *self {
-            IntTy::Isize => "isize",
-            IntTy::I8 => "i8",
-            IntTy::I16 => "i16",
-            IntTy::I32 => "i32",
-            IntTy::I64 => "i64",
-            IntTy::I128 => "i128",
-        }
-    }
-
-    pub fn bit_width(&self) -> Option<u64> {
-        Some(match *self {
-            IntTy::Isize => return None,
-            IntTy::I8 => 8,
-            IntTy::I16 => 16,
-            IntTy::I32 => 32,
-            IntTy::I64 => 64,
-            IntTy::I128 => 128,
-        })
-    }
-
-    pub fn normalize(&self, target_width: u32) -> Self {
-        match self {
-            IntTy::Isize => match target_width {
-                16 => IntTy::I16,
-                32 => IntTy::I32,
-                64 => IntTy::I64,
-                _ => unreachable!(),
-            },
-            _ => *self,
-        }
-    }
-
-    pub fn to_unsigned(self) -> UintTy {
-        match self {
-            IntTy::Isize => UintTy::Usize,
-            IntTy::I8 => UintTy::U8,
-            IntTy::I16 => UintTy::U16,
-            IntTy::I32 => UintTy::U32,
-            IntTy::I64 => UintTy::U64,
-            IntTy::I128 => UintTy::U128,
-        }
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
-#[cfg_attr(
-    feature = "nightly",
-    derive(Encodable_NoContext, Decodable_NoContext, HashStable_NoContext)
-)]
-pub enum UintTy {
-    Usize,
-    U8,
-    U16,
-    U32,
-    U64,
-    U128,
-}
-
-impl UintTy {
-    pub fn name_str(&self) -> &'static str {
-        match *self {
-            UintTy::Usize => "usize",
-            UintTy::U8 => "u8",
-            UintTy::U16 => "u16",
-            UintTy::U32 => "u32",
-            UintTy::U64 => "u64",
-            UintTy::U128 => "u128",
-        }
-    }
-
-    pub fn bit_width(&self) -> Option<u64> {
-        Some(match *self {
-            UintTy::Usize => return None,
-            UintTy::U8 => 8,
-            UintTy::U16 => 16,
-            UintTy::U32 => 32,
-            UintTy::U64 => 64,
-            UintTy::U128 => 128,
-        })
-    }
-
-    pub fn normalize(&self, target_width: u32) -> Self {
-        match self {
-            UintTy::Usize => match target_width {
-                16 => UintTy::U16,
-                32 => UintTy::U32,
-                64 => UintTy::U64,
-                _ => unreachable!(),
-            },
-            _ => *self,
-        }
-    }
-
-    pub fn to_signed(self) -> IntTy {
-        match self {
-            UintTy::Usize => IntTy::Isize,
-            UintTy::U8 => IntTy::I8,
-            UintTy::U16 => IntTy::I16,
-            UintTy::U32 => IntTy::I32,
-            UintTy::U64 => IntTy::I64,
-            UintTy::U128 => IntTy::I128,
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(
-    feature = "nightly",
-    derive(Encodable_NoContext, Decodable_NoContext, HashStable_NoContext)
-)]
-pub enum FloatTy {
-    F16,
-    F32,
-    F64,
-    F128,
-}
-
-impl FloatTy {
-    pub fn name_str(self) -> &'static str {
-        match self {
-            FloatTy::F16 => "f16",
-            FloatTy::F32 => "f32",
-            FloatTy::F64 => "f64",
-            FloatTy::F128 => "f128",
-        }
-    }
-
-    pub fn bit_width(self) -> u64 {
-        match self {
-            FloatTy::F16 => 16,
-            FloatTy::F32 => 32,
-            FloatTy::F64 => 64,
-            FloatTy::F128 => 128,
-        }
     }
 }
 

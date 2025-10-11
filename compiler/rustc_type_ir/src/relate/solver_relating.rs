@@ -153,7 +153,14 @@ where
         } else {
             let tcx = self.cx();
             let opt_variances = tcx.variances_of(item_def_id);
-            relate_args_with_variances(self, item_def_id.into(), opt_variances, a_arg, b_arg, false)
+            relate_args_with_variances(
+                self,
+                item_def_id.into(),
+                opt_variances.iter(),
+                a_arg,
+                b_arg,
+                false,
+            )
         }
     }
 

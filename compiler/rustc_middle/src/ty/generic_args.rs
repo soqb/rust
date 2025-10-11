@@ -448,14 +448,23 @@ impl<'tcx> GenericArgs<'tcx> {
     where
         F: FnMut(&ty::GenericAliasParamDef, &[GenericArg<'tcx>]) -> GenericArg<'tcx>,
     {
-        let defs = ctor.generics(tcx);
-        let mut args = SmallVec::<[GenericArg<'tcx>; 8]>::with_capacity(defs.len());
-        for param in defs {
-            let kind = mk_kind(&param, &args);
-            assert_eq!(param.index as usize, args.len(), "{args:#?}, {ctor:#?}");
-            args.push(kind);
+        match ctor.kind() {
+            ty::AliasCtorKind::Def(def_id) => {
+                return GenericArgs::for_item(tcx, def_id, move |param, args| {
+                    mk_kind(&param.into(), args)
+                });
+            }
+            ty::AliasCtorKind::Variadic(_) => {
+                let defs = ctor.generics(tcx);
+                let mut args = SmallVec::<[GenericArg<'tcx>; 8]>::with_capacity(defs.len());
+                for param in defs {
+                    let kind = mk_kind(&param, &args);
+                    assert_eq!(param.index as usize, args.len(), "{args:#?}, {ctor:#?}");
+                    args.push(kind);
+                }
+                tcx.mk_args(&args)
+            }
         }
-        tcx.mk_args(&args)
     }
 
     pub fn extend_to<F>(

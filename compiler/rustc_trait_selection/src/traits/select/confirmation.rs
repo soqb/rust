@@ -198,7 +198,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
 
         // FIXME(compiler-errors): I don't think this is needed.
         if let ty::Alias(ty::Projection, alias_ty) = placeholder_self_ty.kind() {
-            for (predicate, _) in alias_ty.predicates_instantiated(tcx) {
+            for (predicate, _) in alias_ty.instantiate_own_predicates(tcx) {
                 let normalized = normalize_with_depth_to(
                     self,
                     obligation.param_env,

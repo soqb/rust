@@ -1356,6 +1356,10 @@ impl<'a> State<'a> {
                 self.word(" is ");
                 self.print_ty_pat(pat);
             }
+            ast::TyKind::Unpacked(ty) => {
+                self.word("..");
+                self.print_type(ty);
+            }
         }
         self.end(ib);
     }

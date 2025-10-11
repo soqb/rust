@@ -577,6 +577,15 @@ pub struct IterIdentityCopied<Iter: IntoIterator> {
     it: Iter::IntoIter,
 }
 
+impl<Iter: IntoIterator> Default for IterIdentityCopied<Iter>
+where
+    Iter::IntoIter: Default,
+{
+    fn default() -> Self {
+        Self { it: Default::default() }
+    }
+}
+
 impl<Iter: IntoIterator> Iterator for IterIdentityCopied<Iter>
 where
     Iter::Item: Deref,

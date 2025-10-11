@@ -826,6 +826,7 @@ impl TyCoercionStability {
                 | TyKind::Pat(..)
                 | TyKind::Never
                 | TyKind::Tup(_)
+                | TyKind::VariadicTup(_)
                 | TyKind::Path(_) => Self::Deref,
                 TyKind::OpaqueDef(..)
                 | TyKind::TraitAscription(..)
@@ -891,7 +892,7 @@ impl TyCoercionStability {
                 | ty::CoroutineClosure(..)
                 | ty::Never
                 | ty::Tuple(_)
-                | ty::Alias(ty::Projection, _)
+                | ty::Alias(ty::Projection | ty::Variadic, _)
                 | ty::UnsafeBinder(_) => Self::Deref,
             };
         }
