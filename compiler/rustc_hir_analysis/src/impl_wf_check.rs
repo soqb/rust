@@ -148,14 +148,20 @@ pub(crate) fn enforce_impl_lifetime_params_are_constrained(
                 // used elsewhere are not projected back out.
                 let param_lt = cgp::Parameter::from(param.to_early_bound_region_data());
                 if lifetimes_in_associated_types.contains(&param_lt)
-                    && !input_parameters.contains(&param_lt)
+                    && !input_parameters.parameters.contains(&param_lt)
                 {
+                    let variadic_alias = input_parameters
+                        .nonconstraining_variadic_alias_arguments
+                        .get(&param_lt)
+                        .copied();
                     let mut diag = tcx.dcx().create_err(UnconstrainedGenericParameter {
                         span: tcx.def_span(param.def_id),
                         param_name: tcx.item_ident(param.def_id),
                         param_def_kind: tcx.def_descr(param.def_id),
                         const_param_note: false,
                         const_param_note2: false,
+                        variadic_alias_note: variadic_alias.is_some(),
+                        variadic_alias_label: variadic_alias,
                     });
                     diag.code(E0207);
                     res = Err(diag.emit());
@@ -204,29 +210,35 @@ pub(crate) fn enforce_impl_non_lifetime_params_are_constrained(
 
     let mut res = Ok(());
     for param in &impl_generics.own_params {
-        let err = match param.kind {
+        let cgp_param = match param.kind {
             // Disallow ANY unconstrained type parameters.
             ty::GenericParamDefKind::Type { .. } => {
                 let param_ty = ty::ParamTy::for_def(param);
-                !input_parameters.contains(&cgp::Parameter::from(param_ty))
+                Some(cgp::Parameter::from(param_ty))
             }
             ty::GenericParamDefKind::Const { .. } => {
                 let param_ct = ty::ParamConst::for_def(param);
-                !input_parameters.contains(&cgp::Parameter::from(param_ct))
+                Some(cgp::Parameter::from(param_ct))
             }
             ty::GenericParamDefKind::Lifetime => {
                 // Enforced in `enforce_impl_type_params_are_constrained`.
-                false
+                None
             }
         };
-        if err {
+        if let Some(cgp_param) = cgp_param
+            && !input_parameters.parameters.contains(&cgp_param)
+        {
             let const_param_note = matches!(param.kind, ty::GenericParamDefKind::Const { .. });
+            let variadic_alias =
+                input_parameters.nonconstraining_variadic_alias_arguments.get(&cgp_param).copied();
             let mut diag = tcx.dcx().create_err(UnconstrainedGenericParameter {
                 span: tcx.def_span(param.def_id),
                 param_name: tcx.item_ident(param.def_id),
                 param_def_kind: tcx.def_descr(param.def_id),
                 const_param_note,
                 const_param_note2: const_param_note,
+                variadic_alias_note: variadic_alias.is_some(),
+                variadic_alias_label: variadic_alias,
             });
             diag.code(E0207);
             res = Err(diag.emit());

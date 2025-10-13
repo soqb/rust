@@ -1,0 +1,23 @@
+error[E0207]: the type parameter `R` is not constrained by the impl trait, self type, or predicates
+  --> $DIR/impossible-impls.rs:7:6
+   |
+LL | impl<R: Tuple, S: Tuple> Foo for (..R, ..S) {}
+   |      ^                           ---------- this variadic tuple does not constrain some of its elements
+   |      |
+   |      unconstrained type parameter
+   |
+   = note: variadic tuples do not constrain any parameters between their outermost unpacked elements
+
+error[E0207]: the type parameter `S` is not constrained by the impl trait, self type, or predicates
+  --> $DIR/impossible-impls.rs:7:16
+   |
+LL | impl<R: Tuple, S: Tuple> Foo for (..R, ..S) {}
+   |                ^                 ---------- this variadic tuple does not constrain some of its elements
+   |                |
+   |                unconstrained type parameter
+   |
+   = note: variadic tuples do not constrain any parameters between their outermost unpacked elements
+
+error: aborting due to 2 previous errors
+
+For more information about this error, try `rustc --explain E0207`.

@@ -1556,6 +1556,10 @@ pub(crate) struct UnconstrainedGenericParameter {
     pub const_param_note: bool,
     #[note(hir_analysis_const_param_note2)]
     pub const_param_note2: bool,
+    #[note(hir_analysis_variadic_alias_note)]
+    pub variadic_alias_note: bool,
+    #[label(hir_analysis_variadic_alias_label)]
+    pub variadic_alias_label: Option<Span>,
 }
 
 #[derive(Diagnostic)]

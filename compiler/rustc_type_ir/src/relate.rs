@@ -691,16 +691,21 @@ impl<I: Interner> Relate<I> for ty::TraitPredicate<I> {
 }
 
 trait TupleLike<I: Interner>: Copy + std::fmt::Debug {
+    fn len(self) -> usize;
     fn left_count(self) -> usize;
     fn right_count(self) -> usize;
     fn arity(self, n: usize, m: usize) -> ty::TupleArity;
     fn nth_left(self, i: usize) -> I::Ty;
     fn nth_right(self, i: usize) -> I::Ty;
+    fn nth_param(self, i: usize) -> ty::TupleParam<I>;
     fn bundle_between(self, cx: I, n: usize, m: usize) -> I::Ty;
     fn to_ty(self, cx: I) -> I::Ty;
 }
 
 impl<I: Interner> TupleLike<I> for (I::Tys,) {
+    fn len(self) -> usize {
+        self.0.len()
+    }
     fn left_count(self) -> usize {
         self.0.len()
     }
@@ -716,6 +721,9 @@ impl<I: Interner> TupleLike<I> for (I::Tys,) {
     fn nth_right(self, i: usize) -> I::Ty {
         self.0.as_slice()[self.0.len() - i]
     }
+    fn nth_param(self, _i: usize) -> ty::TupleParam<I> {
+        ty::TupleParam::Inline
+    }
     fn bundle_between(self, cx: I, n: usize, m: usize) -> I::Ty {
         Ty::new_tup(cx, &self.0.as_slice()[n..self.0.len() - m])
     }
@@ -725,18 +733,14 @@ impl<I: Interner> TupleLike<I> for (I::Tys,) {
 }
 
 impl<I: Interner> TupleLike<I> for (I::VariadicAliasCtor, I::GenericArgs) {
+    fn len(self) -> usize {
+        self.1.len()
+    }
     fn left_count(self) -> usize {
-        self.0
-            .tuple_params()
-            .position(|param| param.is_unpacked())
-            .unwrap()
+        self.0.tuple_params().position(|param| param.is_unpacked()).unwrap()
     }
     fn right_count(self) -> usize {
-        self.0
-            .tuple_params()
-            .rev()
-            .position(|param| param.is_unpacked())
-            .unwrap()
+        self.0.tuple_params().rev().position(|param| param.is_unpacked()).unwrap()
     }
     fn arity(self, n: usize, m: usize) -> ty::TupleArity {
         let others = self
@@ -753,6 +757,9 @@ impl<I: Interner> TupleLike<I> for (I::VariadicAliasCtor, I::GenericArgs) {
     }
     fn nth_right(self, i: usize) -> I::Ty {
         self.1.as_slice()[self.1.len() - i].expect_ty()
+    }
+    fn nth_param(self, i: usize) -> ty::TupleParam<I> {
+        self.0.tuple_params().nth(i).unwrap()
     }
     fn bundle_between(self, cx: I, n: usize, m: usize) -> I::Ty {
         match &self.1.as_slice()[n..self.1.len() - m] {
@@ -784,14 +791,38 @@ where
     let left = usize::min(a.left_count(), b.left_count());
     let right = usize::min(a.right_count(), b.right_count());
 
+    let a_arity = a.arity(left, right);
+    let b_arity = b.arity(left, right);
+
     trace!(
-        "structurally_relate_tuple_contents left={left}, right={right}, a_arity = {a:?}, b_arity = {b:?}",
-        a = a.arity(left, right),
-        b = b.arity(left, right),
+        "structurally_relate_tuple_contents left={left}, right={right}, a_arity = {a_arity:?}, b_arity = {b_arity:?}",
     );
 
+    if left == 0 && right == 0 {
+        if let (ty::TupleArity::Variadic { min: n }, ty::TupleArity::Variadic { min: m }) =
+            (a_arity, b_arity)
+            && n == m
+        {
+            // FIXME(soqb): This is a wierd check! It's probably best to intern the param list itself.
+            if (0..a.len()).all(|i| a.nth_param(i) == b.nth_param(i)) {
+                let ty::Alias(ty::Variadic, a) = a.to_ty(cx).kind() else {
+                    panic!();
+                };
+                let ty::Alias(ty::Variadic, b) = b.to_ty(cx).kind() else {
+                    panic!();
+                };
 
-    match (a.arity(left, right), b.arity(left, right)) {
+                if let Ok(alias) = relation.relate(a, b) {
+                    return Ok(alias.to_ty(cx));
+                }
+            }
+        }
+        // Without this short-circuit, we'd recurse infinitely because the
+        // tuple centres are the tuples themselves:
+        return Err(TypeError::TupleAmbiguous(ExpectedFound::new(a.to_ty(cx), b.to_ty(cx))));
+    }
+
+    match (a_arity, b_arity) {
         (
             ty::TupleArity::Fixed(0),
             ty::TupleArity::Fixed(1..) | ty::TupleArity::Variadic { min: 1.. },

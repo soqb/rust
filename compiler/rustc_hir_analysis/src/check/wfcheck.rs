@@ -39,7 +39,9 @@ use tracing::{debug, instrument};
 use {rustc_ast as ast, rustc_hir as hir};
 
 use crate::autoderef::Autoderef;
-use crate::constrained_generic_params::{Parameter, identify_constrained_generic_params};
+use crate::constrained_generic_params::{
+    Parameter, ParameterSet, identify_constrained_generic_params,
+};
 use crate::errors::InvalidReceiverTyHint;
 use crate::{errors, fluent_generated as fluent};
 
@@ -1921,7 +1923,7 @@ pub(super) fn check_variances_for_type_defn<'tcx>(tcx: TyCtxt<'tcx>, def_id: Loc
     assert_eq!(ty_predicates.parent, None);
     let variances = tcx.variances_of(def_id);
 
-    let mut constrained_parameters: FxHashSet<_> = variances
+    let mut constrained_parameters: ParameterSet = variances
         .iter()
         .enumerate()
         .filter(|&(_, &variance)| variance != ty::Bivariant)
@@ -1953,7 +1955,7 @@ pub(super) fn check_variances_for_type_defn<'tcx>(tcx: TyCtxt<'tcx>, def_id: Loc
     for (index, _) in variances.iter().enumerate() {
         let parameter = Parameter(index as u32);
 
-        if constrained_parameters.contains(&parameter) {
+        if constrained_parameters.parameters.contains(&parameter) {
             continue;
         }
 

@@ -40,6 +40,7 @@ pub enum TypeError<I: Interner> {
     ArgumentSorts(ExpectedFound<I::Ty>, usize),
     Traits(ExpectedFound<I::TraitId>),
     VariadicMismatch(ExpectedFound<bool>),
+    TupleAmbiguous(ExpectedFound<I::Ty>),
 
     /// Instantiating a type variable with the given type would have
     /// created a cycle (because it appears somewhere within that
@@ -80,6 +81,7 @@ impl<I: Interner> TypeError<I> {
             Mutability
             | ArgumentMutability(_)
             | TupleArity(_)
+            | TupleAmbiguous(_)
             | ArgCount
             | RegionsDoesNotOutlive(..)
             | RegionsInsufficientlyPolymorphic(..)
