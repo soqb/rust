@@ -20,6 +20,7 @@
 #![feature(assert_matches)]
 #![feature(extend_one)]
 #![feature(rustdoc_internals)]
+#![feature(if_let_guard)]
 #![recursion_limit = "512"] // For rustdoc
 // tidy-alphabetical-end
 

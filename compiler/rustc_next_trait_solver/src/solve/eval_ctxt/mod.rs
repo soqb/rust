@@ -952,11 +952,6 @@ where
         self.relate(param_env, lhs, ty::Variance::Invariant, rhs)
     }
 
-    /// This should be used when relating a rigid alias with another type.
-    ///
-    /// Normally we emit a nested `AliasRelate` when equating an inference
-    /// variable and an alias. This causes us to instead constrain the inference
-    /// variable to the alias without emitting a nested alias relate goals.
     #[instrument(level = "trace", skip(self, param_env), ret)]
     pub(super) fn relate_rigid_alias_non_alias(
         &mut self,
@@ -965,43 +960,41 @@ where
         variance: ty::Variance,
         term: I::Term,
     ) -> Result<(), NoSolution> {
-        // NOTE: this check is purely an optimization, the structural eq would
-        // always fail if the term is not an inference variable.
-        let should_proceed = if term.is_infer() {
-            true
-        } else if let ty::AliasCtorKind::Variadic(_) = alias.ctor.kind()
-            && let Some(ty) = term.as_type()
-            && let ty::Tuple(_) = ty.kind()
-        {
-            true
-        } else {
-            false
-        };
+        let goals = self.delegate.relate_rigid_alias_non_alias(
+            param_env,
+            alias,
+            variance,
+            term,
+            self.origin_span,
+        )?;
+        self.add_goals_from_relation(&goals);
+        Ok(())
+    }
 
-        if should_proceed {
-            let cx = self.cx();
-            // We need to relate `alias` to `term` treating only the outermost
-            // constructor as rigid, relating any contained generic arguments as
-            // normal. We do this by first structurally equating the `term`
-            // with the alias constructor instantiated with unconstrained infer vars,
-            // and then relate this with the whole `alias`.
-            //
-            // Alternatively we could modify `Equate` for this case by adding another
-            // variant to `StructurallyRelateAliases`.
-            let identity_args = self.fresh_args_for_alias(alias.ctor);
-            let rigid_ctor = ty::AliasTerm::new_from_args(cx, alias.ctor, identity_args);
-            let ctor_term = rigid_ctor.to_term(cx);
-            let obligations = self.delegate.eq_structurally_relating_aliases(
-                param_env,
-                term,
-                ctor_term,
-                self.origin_span,
-            )?;
-            debug_assert!(obligations.is_empty());
-            self.relate(param_env, alias, variance, rigid_ctor)
-        } else {
-            Err(NoSolution)
+    #[instrument(level = "trace", skip(self, param_env), ret)]
+    pub(super) fn relate_rigid_aliases(
+        &mut self,
+        param_env: I::ParamEnv,
+        lhs: ty::AliasTerm<I>,
+        variance: ty::Variance,
+        rhs: ty::AliasTerm<I>,
+    ) -> Result<Certainty, NoSolution> {
+        if let ty::AliasCtorKind::Variadic(lhs_ctor) = lhs.ctor.kind()
+            && let ty::AliasCtorKind::Variadic(rhs_ctor) = rhs.ctor.kind()
+        {
+            let is_problematic = |a: I::VariadicAliasCtor, b: I::VariadicAliasCtor| {
+                a.tuple_params().next().unwrap().is_unpacked()
+                    && b.tuple_params().next_back().unwrap().is_unpacked()
+            };
+            if is_problematic(lhs_ctor, rhs_ctor) || is_problematic(rhs_ctor, lhs_ctor) {
+                return Ok(Certainty::AMBIGUOUS);
+            }
         }
+
+        let goals =
+            self.delegate.relate_rigid_aliases(param_env, lhs, variance, rhs, self.origin_span)?;
+        self.add_goals_from_relation(&goals);
+        Ok(Certainty::Yes)
     }
 
     /// This sohuld only be used when we're either instantiating a previously
@@ -1034,15 +1027,7 @@ where
         self.relate(param_env, sub, ty::Variance::Covariant, sup)
     }
 
-    #[instrument(level = "trace", skip(self, param_env), ret)]
-    pub(super) fn relate<T: Relate<I>>(
-        &mut self,
-        param_env: I::ParamEnv,
-        lhs: T,
-        variance: ty::Variance,
-        rhs: T,
-    ) -> Result<(), NoSolution> {
-        let goals = self.delegate.relate(param_env, lhs, variance, rhs, self.origin_span)?;
+    fn add_goals_from_relation(&mut self, goals: &[Goal<I, I::Predicate>]) {
         for &goal in goals.iter() {
             let source = match goal.predicate.kind().skip_binder() {
                 ty::PredicateKind::Subtype { .. } | ty::PredicateKind::AliasRelate(..) => {
@@ -1054,6 +1039,18 @@ where
             };
             self.add_goal(source, goal);
         }
+    }
+
+    #[instrument(level = "trace", skip(self, param_env), ret)]
+    pub(super) fn relate<T: Relate<I>>(
+        &mut self,
+        param_env: I::ParamEnv,
+        lhs: T,
+        variance: ty::Variance,
+        rhs: T,
+    ) -> Result<(), NoSolution> {
+        let goals = self.delegate.relate(param_env, lhs, variance, rhs, self.origin_span)?;
+        self.add_goals_from_relation(&goals);
         Ok(())
     }
 

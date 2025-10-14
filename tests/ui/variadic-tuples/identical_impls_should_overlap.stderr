@@ -3,7 +3,7 @@ error[E0119]: conflicting implementations of trait `Foo` for type `(_, _, ..(_),
    |
 LL | impl<A, B, C, D, R: Tuple> Foo for (A, B, ..R, C, D) {}
    | ---------------------------------------------------- first implementation here
-LL | impl<A, B, C, D, R: Tuple> Foo for (D, A, ..R, B, C) {}
+LL | impl<E, F, G, H, S: Tuple> Foo for (H, E, ..S, F, G) {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ conflicting implementation for `(_, _, ..(_), _, _)`
 
 error: aborting due to 1 previous error

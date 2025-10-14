@@ -19,6 +19,30 @@ pub trait RelateExt: InferCtxtLike {
         TypeError<Self::Interner>,
     >;
 
+    fn relate_rigid_aliases(
+        &self,
+        param_env: <Self::Interner as Interner>::ParamEnv,
+        lhs: ty::AliasTerm<Self::Interner>,
+        variance: ty::Variance,
+        rhs: ty::AliasTerm<Self::Interner>,
+        span: <Self::Interner as Interner>::Span,
+    ) -> Result<
+        Vec<Goal<Self::Interner, <Self::Interner as Interner>::Predicate>>,
+        TypeError<Self::Interner>,
+    >;
+
+    fn relate_rigid_alias_non_alias(
+        &self,
+        param_env: <Self::Interner as Interner>::ParamEnv,
+        lhs: ty::AliasTerm<Self::Interner>,
+        variance: ty::Variance,
+        rhs: <Self::Interner as Interner>::Term,
+        span: <Self::Interner as Interner>::Span,
+    ) -> Result<
+        Vec<Goal<Self::Interner, <Self::Interner as Interner>::Predicate>>,
+        TypeError<Self::Interner>,
+    >;
+
     fn eq_structurally_relating_aliases<T: Relate<Self::Interner>>(
         &self,
         param_env: <Self::Interner as Interner>::ParamEnv,
@@ -47,6 +71,81 @@ impl<Infcx: InferCtxtLike> RelateExt for Infcx {
             SolverRelating::new(self, StructurallyRelateAliases::No, variance, param_env, span);
         relate.relate(lhs, rhs)?;
         Ok(relate.goals)
+    }
+
+    fn relate_rigid_aliases(
+        &self,
+        param_env: <Self::Interner as Interner>::ParamEnv,
+        lhs: ty::AliasTerm<Self::Interner>,
+        variance: ty::Variance,
+        rhs: ty::AliasTerm<Self::Interner>,
+        span: <Self::Interner as Interner>::Span,
+    ) -> Result<
+        Vec<Goal<Self::Interner, <Self::Interner as Interner>::Predicate>>,
+        TypeError<Self::Interner>,
+    > {
+        if let ty::AliasCtorKind::Variadic(lhs_ctor) = lhs.ctor.kind()
+            && let ty::AliasCtorKind::Variadic(rhs_ctor) = rhs.ctor.kind()
+        {
+            let mut relate =
+                SolverRelating::new(self, StructurallyRelateAliases::No, variance, param_env, span);
+            structurally_relate_tuple_contents(
+                &mut relate,
+                (lhs_ctor, lhs.args),
+                (rhs_ctor, rhs.args),
+            )?;
+            Ok(relate.goals)
+        } else {
+            self.relate(param_env, lhs, variance, rhs, span)
+        }
+    }
+
+    /// This should be used when relating a rigid alias with another type.
+    ///
+    /// Normally we emit a nested `AliasRelate` when equating an inference
+    /// variable and an alias. This causes us to instead constrain the inference
+    /// variable to the alias without emitting a nested alias relate goals.
+    fn relate_rigid_alias_non_alias(
+        &self,
+        param_env: <Self::Interner as Interner>::ParamEnv,
+        lhs: ty::AliasTerm<Self::Interner>,
+        variance: ty::Variance,
+        rhs: <Self::Interner as Interner>::Term,
+        span: <Self::Interner as Interner>::Span,
+    ) -> Result<
+        Vec<Goal<Self::Interner, <Self::Interner as Interner>::Predicate>>,
+        TypeError<Self::Interner>,
+    > {
+        if rhs.is_infer() {
+            let cx = self.cx();
+            // We need to relate `lhs` to `rhs` treating only the outermost
+            // constructor as rigid, relating any contained generic arguments as
+            // normal. We do this by first structurally equating the `term`
+            // with the alias constructor instantiated with unconstrained infer vars,
+            // and then relate this with the whole `alias`.
+            //
+            // Alternatively we could modify `Equate` for this case by adding another
+            // variant to `StructurallyRelateAliases`.
+            let identity_args = self.fresh_args_for_alias(lhs.ctor);
+            let rigid_ctor = ty::AliasTerm::new_from_args(cx, lhs.ctor, identity_args);
+            let goals = self.eq_structurally_relating_aliases(
+                param_env,
+                rhs,
+                rigid_ctor.to_term(cx),
+                span,
+            )?;
+            assert!(goals.is_empty());
+            self.relate(param_env, lhs, variance, rigid_ctor, span)
+        } else if let ty::AliasCtorKind::Variadic(lhs_ctor) = lhs.ctor.kind()
+            && let ty::Tuple(tys) = rhs.expect_ty().kind()
+        {
+            let mut relate =
+                SolverRelating::new(self, StructurallyRelateAliases::No, variance, param_env, span);
+            structurally_relate_tuple_contents(&mut relate, (lhs_ctor, lhs.args), (tys,))?;
+            Ok(relate.goals)
+        } else {
+            Err(TypeError::Mismatch)
+        }
     }
 
     fn eq_structurally_relating_aliases<T: Relate<Self::Interner>>(

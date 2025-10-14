@@ -20,9 +20,7 @@ use rustc_type_ir::{self as ty, Interner};
 use tracing::{instrument, trace};
 
 use crate::delegate::SolverDelegate;
-use crate::solve::{
-    CanonicalResponse, Certainty, EvalCtxt, Goal, GoalSource, NoSolution, QueryResult,
-};
+use crate::solve::{Certainty, EvalCtxt, Goal, GoalSource, QueryResult};
 
 impl<D, I> EvalCtxt<'_, D>
 where
@@ -109,39 +107,10 @@ where
             }
 
             (Some(alias_lhs), Some(alias_rhs)) => {
-                if let Some(response) = self.try_combine_variadic_aliases(alias_lhs, alias_rhs)? {
-                    return Ok(response);
-                }
-                self.relate(param_env, alias_lhs, variance, alias_rhs)?;
-                self.evaluate_added_goals_and_make_canonical_response(Certainty::Yes)
+                let certainty =
+                    self.relate_rigid_aliases(param_env, alias_lhs, variance, alias_rhs)?;
+                self.evaluate_added_goals_and_make_canonical_response(certainty)
             }
         }
-    }
-
-    /// Checks a particular edge case arising from structurally relating variadic aliases.
-    ///
-    /// If we've just normalized, and we have unpacking at the start and end of the aliases,
-    /// then we must have something like `(..A, B)` and `(C, ..D)`
-    /// which is ambiguous.
-    fn try_combine_variadic_aliases(
-        &mut self,
-        lhs: ty::AliasTerm<I>,
-        rhs: ty::AliasTerm<I>,
-    ) -> Result<Option<CanonicalResponse<I>>, NoSolution> {
-        if let ty::AliasCtorKind::Variadic(lhs_ctor) = lhs.ctor.kind()
-            && let ty::AliasCtorKind::Variadic(rhs_ctor) = rhs.ctor.kind()
-        {
-            let is_problematic = |a: I::VariadicAliasCtor, b: I::VariadicAliasCtor| {
-                a.tuple_params().next().unwrap().is_unpacked()
-                    && b.tuple_params().next_back().unwrap().is_unpacked()
-            };
-            if is_problematic(lhs_ctor, rhs_ctor) || is_problematic(rhs_ctor, lhs_ctor) {
-                return self
-                    .evaluate_added_goals_and_make_canonical_response(Certainty::AMBIGUOUS)
-                    .map(Some);
-            }
-        }
-
-        Ok(None)
     }
 }

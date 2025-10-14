@@ -1,3 +1,4 @@
+use std::hash::{Hash, Hasher};
 use std::hint::unreachable_unchecked;
 use std::marker::PhantomData;
 use std::{fmt, ptr};
@@ -168,8 +169,26 @@ impl<'tcx> rustc_type_ir::inherent::VariadicAliasCtor<TyCtxt<'tcx>> for Variadic
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, HashStable)]
+#[derive(Clone, Copy, Eq)]
 pub struct VariadicAliasCtor<'tcx>(pub Interned<'tcx, VariadicAliasCtorStorage<'tcx>>);
+
+impl<'tcx> PartialEq for VariadicAliasCtor<'tcx> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.0.inner == other.0.0.inner
+    }
+}
+
+impl<'tcx> Hash for VariadicAliasCtor<'tcx> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.0.inner.hash(state);
+    }
+}
+
+impl<'a, 'tcx> HashStable<StableHashingContext<'a>> for VariadicAliasCtor<'tcx> {
+    fn hash_stable(&self, hcx: &mut StableHashingContext<'a>, hasher: &mut StableHasher) {
+        self.0.0.hash_stable(hcx, hasher);
+    }
+}
 
 impl<'tcx, E: TyEncoder<'tcx>> Encodable<E> for VariadicAliasCtor<'tcx> {
     fn encode(&self, e: &mut E) {
@@ -183,10 +202,36 @@ impl<'tcx, D: TyDecoder<'tcx>> Decodable<D> for VariadicAliasCtor<'tcx> {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+impl<'tcx> fmt::Debug for VariadicAliasCtor<'tcx> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("[")?;
+        for param in self.tuple_params() {
+            let str = match param {
+                ty::TupleParam::Inline => "i",
+                ty::TupleParam::Unpacked(_) => "u",
+            };
+            f.write_str(str)?;
+        }
+        f.write_str("]")
+    }
+}
+
+#[derive(Copy, Clone, Eq)]
 pub struct AliasCtor<'tcx> {
     ptr: *const (),
     marker: PhantomData<(DefId, VariadicAliasCtor<'tcx>)>,
+}
+
+impl<'tcx> PartialEq for AliasCtor<'tcx> {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind() == other.kind()
+    }
+}
+
+impl<'tcx> Hash for AliasCtor<'tcx> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.kind().hash(state);
+    }
 }
 
 unsafe impl<'tcx> Send for AliasCtor<'tcx> {}

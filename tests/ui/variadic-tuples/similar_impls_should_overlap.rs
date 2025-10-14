@@ -5,8 +5,8 @@ use std::marker::Tuple;
 
 #[allow(dead_code)]
 trait Foo {}
-impl<A, B, C, D, R: Tuple> Foo for (A, B, ..R, C, D) {}
-impl<E, F, G, H, S: Tuple> Foo for (H, E, ..S, F, G) {}
+impl<A, B, C, R: Tuple> Foo for (A, ..R, B, C) {}
+impl<D, E, F, S: Tuple> Foo for (D, E, ..S, F) {}
 //~^ ERROR conflicting implementations of trait
 
 fn main() {}

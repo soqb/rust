@@ -549,23 +549,6 @@ pub fn structurally_relate_tys<I: Interner, R: TypeRelation<I>>(
         }
 
         // Alias tend to mostly already be handled downstream due to normalization.
-        (ty::Alias(ty::Variadic, a_data), ty::Alias(ty::Variadic, b_data)) => {
-            let a_ctor = a_data.ctor.expect_variadic();
-            let b_ctor = b_data.ctor.expect_variadic();
-            structurally_relate_tuple_contents(
-                relation,
-                (a_ctor, a_data.args),
-                (b_ctor, b_data.args),
-            )
-        }
-        (ty::Alias(ty::Variadic, a_data), ty::Tuple(b_tys)) => {
-            let a_ctor = a_data.ctor.expect_variadic();
-            structurally_relate_tuple_contents(relation, (a_ctor, a_data.args), (b_tys,))
-        }
-        (ty::Tuple(a_tys), ty::Alias(ty::Variadic, b_data)) => {
-            let b_ctor = b_data.ctor.expect_variadic();
-            structurally_relate_tuple_contents(relation, (a_tys,), (b_ctor, b_data.args))
-        }
         (ty::Alias(a_kind, a_data), ty::Alias(b_kind, b_data)) => {
             let alias_ty = relation.relate(a_data, b_data)?;
             assert_eq!(a_kind, b_kind);
@@ -690,22 +673,17 @@ impl<I: Interner> Relate<I> for ty::TraitPredicate<I> {
     }
 }
 
-trait TupleLike<I: Interner>: Copy + std::fmt::Debug {
-    fn len(self) -> usize;
+pub(super) trait TupleLike<I: Interner>: Copy + std::fmt::Debug {
     fn left_count(self) -> usize;
     fn right_count(self) -> usize;
     fn arity(self, n: usize, m: usize) -> ty::TupleArity;
     fn nth_left(self, i: usize) -> I::Ty;
     fn nth_right(self, i: usize) -> I::Ty;
-    fn nth_param(self, i: usize) -> ty::TupleParam<I>;
     fn bundle_between(self, cx: I, n: usize, m: usize) -> I::Ty;
     fn to_ty(self, cx: I) -> I::Ty;
 }
 
 impl<I: Interner> TupleLike<I> for (I::Tys,) {
-    fn len(self) -> usize {
-        self.0.len()
-    }
     fn left_count(self) -> usize {
         self.0.len()
     }
@@ -721,9 +699,6 @@ impl<I: Interner> TupleLike<I> for (I::Tys,) {
     fn nth_right(self, i: usize) -> I::Ty {
         self.0.as_slice()[self.0.len() - i]
     }
-    fn nth_param(self, _i: usize) -> ty::TupleParam<I> {
-        ty::TupleParam::Inline
-    }
     fn bundle_between(self, cx: I, n: usize, m: usize) -> I::Ty {
         Ty::new_tup(cx, &self.0.as_slice()[n..self.0.len() - m])
     }
@@ -733,9 +708,6 @@ impl<I: Interner> TupleLike<I> for (I::Tys,) {
 }
 
 impl<I: Interner> TupleLike<I> for (I::VariadicAliasCtor, I::GenericArgs) {
-    fn len(self) -> usize {
-        self.1.len()
-    }
     fn left_count(self) -> usize {
         self.0.tuple_params().position(|param| param.is_unpacked()).unwrap()
     }
@@ -758,9 +730,6 @@ impl<I: Interner> TupleLike<I> for (I::VariadicAliasCtor, I::GenericArgs) {
     fn nth_right(self, i: usize) -> I::Ty {
         self.1.as_slice()[self.1.len() - i].expect_ty()
     }
-    fn nth_param(self, i: usize) -> ty::TupleParam<I> {
-        self.0.tuple_params().nth(i).unwrap()
-    }
     fn bundle_between(self, cx: I, n: usize, m: usize) -> I::Ty {
         match &self.1.as_slice()[n..self.1.len() - m] {
             [one] => one.expect_ty(),
@@ -778,7 +747,7 @@ impl<I: Interner> TupleLike<I> for (I::VariadicAliasCtor, I::GenericArgs) {
     }
 }
 
-fn structurally_relate_tuple_contents<I: Interner, R: TypeRelation<I>>(
+pub(super) fn structurally_relate_tuple_contents<I: Interner, R: TypeRelation<I>>(
     relation: &mut R,
     a: impl TupleLike<I>,
     b: impl TupleLike<I>,
@@ -798,30 +767,6 @@ where
         "structurally_relate_tuple_contents left={left}, right={right}, a_arity = {a_arity:?}, b_arity = {b_arity:?}",
     );
 
-    if left == 0 && right == 0 {
-        if let (ty::TupleArity::Variadic { min: n }, ty::TupleArity::Variadic { min: m }) =
-            (a_arity, b_arity)
-            && n == m
-        {
-            // FIXME(soqb): This is a wierd check! It's probably best to intern the param list itself.
-            if (0..a.len()).all(|i| a.nth_param(i) == b.nth_param(i)) {
-                let ty::Alias(ty::Variadic, a) = a.to_ty(cx).kind() else {
-                    panic!();
-                };
-                let ty::Alias(ty::Variadic, b) = b.to_ty(cx).kind() else {
-                    panic!();
-                };
-
-                if let Ok(alias) = relation.relate(a, b) {
-                    return Ok(alias.to_ty(cx));
-                }
-            }
-        }
-        // Without this short-circuit, we'd recurse infinitely because the
-        // tuple centres are the tuples themselves:
-        return Err(TypeError::TupleAmbiguous(ExpectedFound::new(a.to_ty(cx), b.to_ty(cx))));
-    }
-
     match (a_arity, b_arity) {
         (
             ty::TupleArity::Fixed(0),
@@ -838,6 +783,12 @@ where
             return Err(TypeError::TupleArity(ExpectedFound::new(a, b)));
         }
         _ => (),
+    }
+
+    if left == 0 && right == 0 {
+        // Without this short-circuit, we'd recurse infinitely because the
+        // tuple centres are the tuples themselves:
+        return Err(TypeError::TupleAmbiguous(ExpectedFound::new(a.to_ty(cx), b.to_ty(cx))));
     }
 
     let sum = left + right + 1;
