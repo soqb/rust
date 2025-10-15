@@ -1,6 +1,8 @@
 //@ run-pass
 //@ compile-flags: -Znext-solver=globally
+#![feature(variadic_tuples)]
 #![feature(tuple_trait)]
+#![allow(incomplete_features)]
 
 use std::marker::Tuple;
 

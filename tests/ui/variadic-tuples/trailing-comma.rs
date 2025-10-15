@@ -1,3 +1,4 @@
+//@ check-pass
 //@ compile-flags: -Znext-solver=globally
 #![feature(variadic_tuples)]
 #![feature(tuple_trait)]
@@ -5,10 +6,8 @@
 
 use std::marker::Tuple;
 
-#[allow(dead_code)]
-trait Foo {}
-impl<T, R: Tuple> Foo for (T, ..R) {}
-impl<T, R: Tuple> Foo for (..R, T) {}
-//~^ ERROR conflicting implementations of trait
+fn identity<T: Tuple>(params: (..T)) -> (..T,) {
+    params
+}
 
 fn main() {}

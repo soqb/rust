@@ -54,6 +54,7 @@ mod region_kind;
 mod ty_info;
 mod ty_kind;
 mod upcast;
+mod variadic_tuples;
 mod visit;
 
 pub use AliasTyKind::*;
@@ -78,6 +79,7 @@ pub use rustc_ast_ir::{FloatTy, IntTy, Movability, Mutability, Pinnedness, UintT
 pub use ty_info::*;
 pub use ty_kind::*;
 pub use upcast::*;
+pub use variadic_tuples::*;
 pub use visit::*;
 
 rustc_index::newtype_index! {

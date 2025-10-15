@@ -680,6 +680,8 @@ declare_features! (
     (internal, unsized_fn_params, "1.49.0", Some(48055)),
     /// Allows using the `#[used(linker)]` (or `#[used(compiler)]`) attribute.
     (unstable, used_with_arg, "1.60.0", Some(93798)),
+    /// Allows the use of variadic tuples, e.g `(..R, T)`.
+    (incomplete, variadic_tuples, "CURRENT_RUSTC_VERSION", None),
     /// Allows use of attributes in `where` clauses.
     (unstable, where_clause_attrs, "1.87.0", Some(115590)),
     /// Allows use of x86 `AMX` target-feature attributes and intrinsics

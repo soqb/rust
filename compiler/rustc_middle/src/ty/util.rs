@@ -893,7 +893,19 @@ impl<'tcx> TyCtxt<'tcx> {
     ///
     /// [free]: ty::Free
     pub fn expand_free_alias_tys<T: TypeFoldable<TyCtxt<'tcx>>>(self, value: T) -> T {
-        value.fold_with(&mut FreeAliasTypeExpander { tcx: self, depth: 0 })
+        value.fold_with(&mut StructuralAliasTypeExpander {
+            tcx: self,
+            depth: 0,
+            expand_variadic: false,
+        })
+    }
+
+    pub fn expand_structural_alias_tys<T: TypeFoldable<TyCtxt<'tcx>>>(self, value: T) -> T {
+        value.fold_with(&mut StructuralAliasTypeExpander {
+            tcx: self,
+            depth: 0,
+            expand_variadic: true,
+        })
     }
 
     /// Peel off all [free alias types] in this type until there are none left.
@@ -1042,38 +1054,62 @@ impl<'tcx> TypeFolder<TyCtxt<'tcx>> for OpaqueTypeExpander<'tcx> {
         }
     }
 }
-
-struct FreeAliasTypeExpander<'tcx> {
+struct StructuralAliasTypeExpander<'tcx> {
     tcx: TyCtxt<'tcx>,
     depth: usize,
+    expand_variadic: bool,
 }
 
-impl<'tcx> TypeFolder<TyCtxt<'tcx>> for FreeAliasTypeExpander<'tcx> {
+impl<'tcx> TypeFolder<TyCtxt<'tcx>> for StructuralAliasTypeExpander<'tcx> {
     fn cx(&self) -> TyCtxt<'tcx> {
         self.tcx
     }
 
     fn fold_ty(&mut self, ty: Ty<'tcx>) -> Ty<'tcx> {
-        if !ty.has_type_flags(ty::TypeFlags::HAS_TY_FREE_ALIAS) {
+        let flags = if self.expand_variadic {
+            ty::TypeFlags::HAS_TY_FREE_ALIAS | ty::TypeFlags::HAS_TY_VARIADIC
+        } else {
+            ty::TypeFlags::HAS_TY_FREE_ALIAS
+        };
+
+        if !ty.has_type_flags(flags) {
             return ty;
         }
-        let ty::Alias(ty::Free, alias) = ty.kind() else {
-            return ty.super_fold_with(self);
-        };
-        if !self.tcx.recursion_limit().value_within_limit(self.depth) {
-            let guar = self.tcx.dcx().delayed_bug("overflow expanding free alias type");
-            return Ty::new_error(self.tcx, guar);
-        }
+        match ty.kind() {
+            ty::Alias(ty::Free, data) => {
+                if !self.tcx.recursion_limit().value_within_limit(self.depth) {
+                    let guar = self.tcx.dcx().delayed_bug("overflow expanding free alias type");
+                    return Ty::new_error(self.tcx, guar);
+                }
 
-        self.depth += 1;
-        let ty = ensure_sufficient_stack(|| {
-            self.tcx
-                .type_of(alias.ctor.expect_def())
-                .instantiate(self.tcx, alias.args)
-                .fold_with(self)
-        });
-        self.depth -= 1;
-        ty
+                self.depth += 1;
+                let ty = ensure_sufficient_stack(|| {
+                    self.tcx
+                        .type_of(data.ctor.expect_def())
+                        .instantiate(self.tcx, data.args)
+                        .fold_with(self)
+                });
+                self.depth -= 1;
+                ty
+            }
+            &ty::Alias(ty::Variadic, data) if self.expand_variadic => {
+                if !self.tcx.recursion_limit().value_within_limit(self.depth) {
+                    let guar = self.tcx.dcx().delayed_bug("overflow expanding variadic alias type");
+                    return Ty::new_error(self.tcx, guar);
+                }
+
+                self.depth += 1;
+                let ty = ensure_sufficient_stack(|| {
+                    let Ok(ty) = rustc_type_ir::flatten_variadic_alias(self.tcx, data, |ty| {
+                        Ok::<_, !>(ty.fold_with(self))
+                    });
+                    ty
+                });
+                self.depth -= 1;
+                ty
+            }
+            _ => ty.super_fold_with(self),
+        }
     }
 
     fn fold_const(&mut self, ct: ty::Const<'tcx>) -> ty::Const<'tcx> {

@@ -6,7 +6,7 @@ use rustc_middle::ty::{
 use rustc_span::Span;
 use tracing::debug;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) struct Parameter(pub u32);
 
 impl From<ty::ParamTy> for Parameter {
@@ -48,14 +48,19 @@ pub(crate) fn parameters_for_impl<'tcx>(
     impl_self_ty: Ty<'tcx>,
     impl_trait_ref: Option<ty::TraitRef<'tcx>>,
 ) -> ParameterSet {
-    let (parameters, ncvaas) = match impl_trait_ref {
-        Some(tr) => parameters_for_inner(tcx, tr, false, NcvaaState::Check),
-        None => parameters_for_inner(tcx, impl_self_ty, false, NcvaaState::Check),
+    let mut collector = match impl_trait_ref {
+        Some(tr) => parameters_for_inner(tcx, tr, false),
+        None => parameters_for_inner(tcx, impl_self_ty, false),
     };
-    ParameterSet {
-        parameters: parameters.into_iter().collect(),
-        nonconstraining_variadic_alias_arguments: ncvaas,
+    let parameters = collector.drain().collect();
+    let mut ncvaas = FxHashMap::default();
+    for set in collector.delayed_parameter_sets {
+        #[allow(rustc::potential_query_instability, reason = "diagnostics only")]
+        for &param in &set.not_yet_constrained {
+            ncvaas.entry(param).or_insert(set.span);
+        }
     }
+    ParameterSet { parameters, nonconstraining_variadic_alias_arguments: ncvaas }
 }
 
 /// If `include_nonconstraining` is false, returns the list of parameters that are
@@ -68,99 +73,162 @@ pub(crate) fn parameters_for<'tcx>(
     value: impl TypeFoldable<TyCtxt<'tcx>>,
     include_nonconstraining: bool,
 ) -> Vec<Parameter> {
-    parameters_for_inner(tcx, value, include_nonconstraining, NcvaaState::NoCheck).0
+    parameters_for_inner(tcx, value, include_nonconstraining).drain().collect()
 }
 
 fn parameters_for_inner<'tcx>(
     tcx: TyCtxt<'tcx>,
     value: impl TypeFoldable<TyCtxt<'tcx>>,
     include_nonconstraining: bool,
-    nonconstraining_variadic_alias_arguments_state: NcvaaState,
-) -> (Vec<Parameter>, FxHashMap<Parameter, Span>) {
+) -> ParameterCollector {
     let mut collector = ParameterCollector {
         include_nonconstraining,
-        nonconstraining_variadic_alias_arguments_state,
-        parameters: vec![],
-        nonconstraining_variadic_alias_arguments: FxHashMap::default(),
+        parameters: Vec::new(),
+        delayed_parameter_sets: Vec::new(),
     };
-    let value = if !include_nonconstraining { tcx.expand_free_alias_tys(value) } else { value };
+    let value =
+        if !include_nonconstraining { tcx.expand_structural_alias_tys(value) } else { value };
     value.visit_with(&mut collector);
-    (collector.parameters, collector.nonconstraining_variadic_alias_arguments)
+    collector
 }
 
-enum NcvaaState {
-    NoCheck,
-    Check,
-    Collect { origin: Span },
+/// This is needed for correct handling of variadic aliases.
+///
+/// The rationale is easiest to explain with the following
+/// motivating examples in mind:
+/// ```ignore (illustrative)
+/// // Fully constrained.
+/// /* (1) */ impl<R, T> for (..R, T) {}
+/// /* (2) */ impl<R> for (..R) {}
+/// /* (3) */ impl<R> for (..R, ..R) {}
+///
+///
+/// // Not fully constrained.
+/// // Consider that there is more than one possible solution:
+/// // * R == (u8,), S == ()
+/// // * R == (), S == (u8,)
+/// // * and infinite others..
+/// /* (4) */ impl<R, S> for (..R, ..S) {}
+/// /* (5) */ impl<R, S> for ((..R, ..S), (..R, ..S)) {}
+///
+/// // Fully constrained.
+/// // Since `R` is constrained by the inline element,
+/// // We can thus eliminate `..R` and infer a reasonable solution in `S`.
+/// /* (6) */ impl<R, S> for (R, ..R, ..S) {}
+/// /* (7) */ impl<R, S> for (..R, R, ..S) {}
+/// /* (7) */ impl<R, S> for (..R, ..S, R) {}
+/// ```
+///
+/// To formalize this property, we say that, modulo [normalization],
+/// the unpacked arguments of any given variadic alias
+/// can together constrain _up to one_ parameter.
+///
+/// Where there is ambiguity, (i.e. an arbitrary choice could be made),
+/// we choose not to constrain any parameters.
+/// In (4), a trivial (albeit misleaing) resolution would be
+/// to unambiguously require `S == ()` in inference,
+/// but this is both difficult to support there, and risks permitting (5).
+///
+/// [normalization]: TyCtxt::expand_structural_alias_tys
+#[derive(Debug)]
+struct DelayedParameterSet {
+    not_yet_constrained: FxHashSet<Parameter>,
+    span: Span,
 }
 
+impl DelayedParameterSet {
+    fn remove(&mut self, parameter: Parameter) {
+        self.not_yet_constrained.remove(&parameter);
+    }
+
+    fn single_out(&mut self) -> Option<Parameter> {
+        if self.not_yet_constrained.len() == 1 {
+            #[allow(rustc::potential_query_instability, reason = "there is only one element")]
+            Some(self.not_yet_constrained.drain().next().unwrap())
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug)]
 struct ParameterCollector {
     parameters: Vec<Parameter>,
-    nonconstraining_variadic_alias_arguments: FxHashMap<Parameter, Span>,
+    delayed_parameter_sets: Vec<DelayedParameterSet>,
     include_nonconstraining: bool,
-    nonconstraining_variadic_alias_arguments_state: NcvaaState,
+}
+
+impl ParameterCollector {
+    fn drain(&mut self) -> impl Iterator<Item = Parameter> + '_ {
+        for &param in &self.parameters {
+            for set in &mut self.delayed_parameter_sets {
+                set.remove(param);
+            }
+        }
+
+        let delayed_parameter_sets = &mut self.delayed_parameter_sets;
+        self.parameters.drain(..).chain(std::iter::from_fn(|| {
+            let Some(param) = delayed_parameter_sets.iter_mut().find_map(|set| set.single_out())
+            else {
+                return None;
+            };
+
+            for set in delayed_parameter_sets.iter_mut() {
+                set.remove(param);
+            }
+
+            Some(param)
+        }))
+    }
+
+    fn insert(&mut self, param: impl Into<Parameter>) {
+        let param = param.into();
+        self.parameters.push(param);
+    }
 }
 
 impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for ParameterCollector {
     fn visit_ty(&mut self, t: Ty<'tcx>) {
         match *t.kind() {
+            // Variadic aliases are typically injective:
+            ty::Alias(ty::Variadic, data) if !self.include_nonconstraining => {
+                let ctor = data.ctor.expect_variadic();
+                for (_, arg) in
+                    ctor.tuple_params().zip(data.args).filter(|(param, _)| param.is_inline())
+                {
+                    arg.visit_with(self);
+                }
+
+                let mut parameters = std::mem::take(&mut self.parameters);
+                for (_, arg) in
+                    ctor.tuple_params().zip(data.args).filter(|(param, _)| param.is_unpacked())
+                {
+                    arg.visit_with(self);
+                }
+                std::mem::swap(&mut parameters, &mut self.parameters);
+
+                if let &[single] = &parameters[..] {
+                    self.insert(single);
+                } else {
+                    let parameters = parameters.into_iter().collect();
+                    let set =
+                        DelayedParameterSet { not_yet_constrained: parameters, span: ctor.span() };
+                    self.delayed_parameter_sets.push(set);
+                }
+
+                return;
+            }
             // Aliases are not generally injective:
             ty::Alias(ty::Projection | ty::Inherent | ty::Opaque, _)
                 if !self.include_nonconstraining =>
             {
                 return;
             }
-            // But variadic aliases often are:
-            ty::Alias(ty::Variadic, data) if !self.include_nonconstraining => {
-                if let NcvaaState::Collect { .. } =
-                    self.nonconstraining_variadic_alias_arguments_state
-                {
-                    t.super_visit_with(self);
-                    return;
-                }
-
-                let ctor = data.ctor.expect_variadic();
-                let left = ctor.tuple_params().position(|param| param.is_unpacked()).unwrap();
-                let right = ctor.tuple_params().rposition(|param| param.is_unpacked()).unwrap() + 1;
-
-                // In an impl like `impl<R, S, T> Foo for (..R, T, ..S)`,
-                // we cannot consider R, S, T to be constrained.
-                if left + 1 != right {
-                    for arg in &data.args[..left] {
-                        arg.visit_with(self);
-                    }
-
-                    for arg in &data.args[right..] {
-                        arg.visit_with(self);
-                    }
-
-                    if let NcvaaState::Check = self.nonconstraining_variadic_alias_arguments_state {
-                        self.nonconstraining_variadic_alias_arguments_state =
-                            NcvaaState::Collect { origin: ctor.span() };
-                        for arg in &data.args[left..right] {
-                            arg.visit_with(self);
-                        }
-                        self.nonconstraining_variadic_alias_arguments_state = NcvaaState::Check;
-                    }
-
-                    return;
-                }
-            }
             // All free alias types should've been expanded beforehand.
             ty::Alias(ty::Free, _) if !self.include_nonconstraining => {
                 bug!("unexpected free alias type")
             }
-            ty::Param(param) => {
-                if let NcvaaState::Collect { origin } =
-                    self.nonconstraining_variadic_alias_arguments_state
-                {
-                    self.nonconstraining_variadic_alias_arguments
-                        .entry(Parameter::from(param))
-                        .or_insert(origin);
-                } else {
-                    self.parameters.push(Parameter::from(param))
-                }
-            }
+            ty::Param(param) => self.insert(param),
             _ => {}
         }
 
@@ -169,7 +237,7 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for ParameterCollector {
 
     fn visit_region(&mut self, r: ty::Region<'tcx>) {
         if let ty::ReEarlyParam(data) = r.kind() {
-            self.parameters.push(Parameter::from(data));
+            self.insert(data);
         }
     }
 
@@ -180,7 +248,7 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for ParameterCollector {
                 return;
             }
             ty::ConstKind::Param(data) => {
-                self.parameters.push(Parameter::from(data));
+                self.insert(data);
             }
             _ => {}
         }

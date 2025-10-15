@@ -1,23 +1,85 @@
 error[E0207]: the type parameter `R` is not constrained by the impl trait, self type, or predicates
-  --> $DIR/impossible-impls.rs:7:6
+  --> $DIR/impossible-impls.rs:9:6
    |
 LL | impl<R: Tuple, S: Tuple> Foo for (..R, ..S) {}
    |      ^                           ---------- this variadic tuple does not constrain some of its elements
    |      |
    |      unconstrained type parameter
    |
-   = note: variadic tuples do not constrain any parameters between their outermost unpacked elements
+   = note: variadic tuples constrain at most one of their unpacked elements
 
 error[E0207]: the type parameter `S` is not constrained by the impl trait, self type, or predicates
-  --> $DIR/impossible-impls.rs:7:16
+  --> $DIR/impossible-impls.rs:9:16
    |
 LL | impl<R: Tuple, S: Tuple> Foo for (..R, ..S) {}
    |                ^                 ---------- this variadic tuple does not constrain some of its elements
    |                |
    |                unconstrained type parameter
    |
-   = note: variadic tuples do not constrain any parameters between their outermost unpacked elements
+   = note: variadic tuples constrain at most one of their unpacked elements
 
-error: aborting due to 2 previous errors
+error[E0207]: the type parameter `R` is not constrained by the impl trait, self type, or predicates
+  --> $DIR/impossible-impls.rs:14:6
+   |
+LL | impl<R: Tuple, T, S: Tuple> Bar for (..R, T, ..S) {}
+   |      ^ unconstrained type parameter ------------- this variadic tuple does not constrain some of its elements
+   |
+   = note: variadic tuples constrain at most one of their unpacked elements
+
+error[E0207]: the type parameter `S` is not constrained by the impl trait, self type, or predicates
+  --> $DIR/impossible-impls.rs:14:19
+   |
+LL | impl<R: Tuple, T, S: Tuple> Bar for (..R, T, ..S) {}
+   |                   ^                 ------------- this variadic tuple does not constrain some of its elements
+   |                   |
+   |                   unconstrained type parameter
+   |
+   = note: variadic tuples constrain at most one of their unpacked elements
+
+error[E0207]: the type parameter `R` is not constrained by the impl trait, self type, or predicates
+  --> $DIR/impossible-impls.rs:19:6
+   |
+LL | impl<R: Tuple, S: Tuple> Foo for (..R, ..S) {}
+   |                                  ---------- this variadic tuple does not constrain some of its elements
+...
+LL | impl<R: Tuple, S: Tuple> Baz for ((..R, ..S), (..S, ..R)) {}
+   |      ^ unconstrained type parameter
+   |
+   = note: variadic tuples constrain at most one of their unpacked elements
+
+error[E0207]: the type parameter `S` is not constrained by the impl trait, self type, or predicates
+  --> $DIR/impossible-impls.rs:19:16
+   |
+LL | impl<R: Tuple, S: Tuple> Foo for (..R, ..S) {}
+   |                                  ---------- this variadic tuple does not constrain some of its elements
+...
+LL | impl<R: Tuple, S: Tuple> Baz for ((..R, ..S), (..S, ..R)) {}
+   |                ^ unconstrained type parameter
+   |
+   = note: variadic tuples constrain at most one of their unpacked elements
+
+error[E0207]: the type parameter `R` is not constrained by the impl trait, self type, or predicates
+  --> $DIR/impossible-impls.rs:24:6
+   |
+LL | impl<R: Tuple, S: Tuple> Foo for (..R, ..S) {}
+   |                                  ---------- this variadic tuple does not constrain some of its elements
+...
+LL | impl<R: Tuple, S: Tuple> Quux for ((..R, ..S), (..R, ..S)) {}
+   |      ^ unconstrained type parameter
+   |
+   = note: variadic tuples constrain at most one of their unpacked elements
+
+error[E0207]: the type parameter `S` is not constrained by the impl trait, self type, or predicates
+  --> $DIR/impossible-impls.rs:24:16
+   |
+LL | impl<R: Tuple, S: Tuple> Foo for (..R, ..S) {}
+   |                                  ---------- this variadic tuple does not constrain some of its elements
+...
+LL | impl<R: Tuple, S: Tuple> Quux for ((..R, ..S), (..R, ..S)) {}
+   |                ^ unconstrained type parameter
+   |
+   = note: variadic tuples constrain at most one of their unpacked elements
+
+error: aborting due to 8 previous errors
 
 For more information about this error, try `rustc --explain E0207`.

@@ -454,10 +454,14 @@ impl<'a> Parser<'a> {
                 }
             }
         } else if self.eat(exp!(DotDot)) {
+            let ty = self.parse_ty()?;
+            let span = lo.to(self.prev_token.span);
+            self.psess.gated_spans.gate(sym::variadic_tuples, span);
+
             match allow_tuple_unpacking {
-                AllowTupleUnpacking::Yes => TyKind::Unpacked(self.parse_ty()?),
+                AllowTupleUnpacking::Yes => TyKind::Unpacked(ty),
                 AllowTupleUnpacking::No => {
-                    let guar = self.dcx().emit_err(InvalidTupleUnpacking { span: lo });
+                    let guar = self.dcx().emit_err(InvalidTupleUnpacking { span });
                     TyKind::Err(guar)
                 }
             }

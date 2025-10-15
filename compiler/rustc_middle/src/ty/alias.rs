@@ -97,7 +97,9 @@ impl<'tcx> VariadicAliasCtor<'tcx> {
             .collect();
 
         if inner.is_empty() {
-            span_bug!(span, "created a variadic alias with zero arguments.");
+            span_bug!(span, "created a variadic alias with zero arguments");
+        } else if spans.is_empty() {
+            span_bug!(span, "created a variadic alias with zero unpacked parameters");
         }
 
         let sized = cx.require_lang_item(LangItem::Sized, span);

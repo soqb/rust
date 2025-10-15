@@ -1,5 +1,5 @@
 error[E0119]: conflicting implementations of trait `Foo` for type `(_, ..(_))`
-  --> $DIR/reverse-chirality-impls-should-overlap.rs:9:1
+  --> $DIR/reverse-chirality-impls-should-overlap.rs:11:1
    |
 LL | impl<T, R: Tuple> Foo for (T, ..R) {}
    | ---------------------------------- first implementation here

@@ -1,5 +1,5 @@
 error[E0119]: conflicting implementations of trait `Foo` for type `(_, _, ..(_), _, _)`
-  --> $DIR/identical_impls_should_overlap.rs:9:1
+  --> $DIR/identical_impls_should_overlap.rs:11:1
    |
 LL | impl<A, B, C, D, R: Tuple> Foo for (A, B, ..R, C, D) {}
    | ---------------------------------------------------- first implementation here

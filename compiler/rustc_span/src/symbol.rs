@@ -2383,6 +2383,7 @@ symbols! {
         value,
         values,
         var,
+        variadic_tuples,
         variant_count,
         vec,
         vec_as_mut_slice,
