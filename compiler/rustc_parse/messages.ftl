@@ -3,6 +3,8 @@ parse_add_paren = try adding parentheses
 parse_ambiguous_range_pattern = the range pattern here has ambiguous interpretation
 parse_ambiguous_range_pattern_suggestion = add parentheses to clarify the precedence
 
+parse_argumentless_tuple_unpacking = tuple unpacking `..T` must be followed by a type
+
 parse_array_brackets_instead_of_braces = this is a block expression, not an array
     .suggestion = to make an array, use square brackets instead of curly braces
 
@@ -296,6 +298,8 @@ parse_extern_crate_name_with_dashes = crate name using dashes are not valid in `
 parse_extern_item_cannot_be_const = extern items cannot be `const`
     .suggestion = try using a static value
     .note = for more information, visit https://doc.rust-lang.org/std/keyword.extern.html
+
+parse_external_tuple_unpacking = tuple unpacking `..T` may not be used outside a tuple
 
 parse_extra_if_in_let_else = remove the `if` if you meant to write a `let...else` statement
 
@@ -667,10 +671,16 @@ parse_missing_trait_in_trait_impl = missing trait in a trait impl
     .suggestion_add_trait = add a trait here
     .suggestion_remove_for = for an inherent impl, drop this `for`
 
+parse_misspelled_c_variadic_type = the C-variadic type `...` must be spelled with three dots
+    .suggestion = use three dots instead
+
 parse_misspelled_kw = {$is_incorrect_case ->
                     [true] write keyword `{$similar_kw}` in lowercase
                     *[false] there is a keyword `{$similar_kw}` with a similar name
 }
+
+parse_misspelled_tuple_unpacking = tuple unpacking `..T` must be spelled with two dots
+    .suggestion = use two dots instead
 
 parse_modifier_lifetime = `{$modifier}` may only modify trait bounds, not lifetime bounds
     .suggestion = remove the `{$modifier}`
@@ -710,16 +720,6 @@ parse_nested_adt = `{$kw_str}` definition cannot be nested inside `{$keyword}`
     .suggestion = consider creating a new `{$kw_str}` definition instead of nesting
 
 parse_nested_c_variadic_type = C-variadic type `...` may not be nested inside another type
-
-parse_external_tuple_unpacking = tuple unpacking `..T` may not be used outside a tuple
-
-parse_argumentless_tuple_unpacking = tuple unpacking `..T` must be followed by a type
-
-parse_misspelled_c_variadic_type = the C-variadic type `...` must be spelled with three dots
-    .suggestion = use three dots instead
-
-parse_misspelled_tuple_unpacking = tuple unpacking `..T` must be spelled with two dots
-    .suggestion = use two dots instead
 
 parse_no_brace_unicode_escape = incorrect unicode escape sequence
     .label = {parse_no_brace_unicode_escape}

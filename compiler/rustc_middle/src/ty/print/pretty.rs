@@ -798,7 +798,9 @@ pub trait PrettyPrinter<'tcx>: Printer<'tcx> + fmt::Write {
                 }
             }
             ty::Foreign(def_id) => self.print_def_path(def_id, &[])?,
-            ty::Alias(ty::Projection | ty::Inherent | ty::Free | ty::Variadic, ref data) => data.print(self)?,
+            ty::Alias(ty::Projection | ty::Inherent | ty::Free | ty::Variadic, ref data) => {
+                data.print(self)?
+            }
             ty::Placeholder(placeholder) => placeholder.print(self)?,
             ty::Alias(ty::Opaque, ty::AliasTy { ctor, args, .. }) => {
                 // We use verbose printing in 'NO_QUERIES' mode, to

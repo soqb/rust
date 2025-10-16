@@ -509,8 +509,9 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
             if let Some(const_arg) = constraint.ct()
                 && let hir::ConstArgKind::Anon(anon_const) = const_arg.kind
             {
-                let ty = alias_term
-                    .map_bound(|alias| tcx.type_of(alias.ctor.expect_def()).instantiate(tcx, alias.args));
+                let ty = alias_term.map_bound(|alias| {
+                    tcx.type_of(alias.ctor.expect_def()).instantiate(tcx, alias.args)
+                });
                 let ty =
                     check_assoc_const_binding_type(self, constraint.ident, ty, constraint.hir_id);
                 tcx.feed_anon_const_type(anon_const.def_id, ty::EarlyBinder::bind(ty));

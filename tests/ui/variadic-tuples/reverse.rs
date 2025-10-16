@@ -26,4 +26,3 @@ fn main() {
     let args = (1usize, "hello, world!", Some('x'));
     assert_eq!(reverse(args), (Some('x'), "hello, world!", 1usize));
 }
-

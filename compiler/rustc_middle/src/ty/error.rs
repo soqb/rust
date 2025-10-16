@@ -88,9 +88,11 @@ impl<'tcx> TypeError<'tcx> {
                 let found = values.found.sort_string(tcx);
                 report_maybe_different(&expected, &found).into()
             }
-            TypeError::TupleAmbiguous(values) => {
-                format!("expected the variadic tuple `{}`, found `{}`", values.expected, values.found).into()
-            }
+            TypeError::TupleAmbiguous(values) => format!(
+                "expected the variadic tuple `{}`, found `{}`",
+                values.expected, values.found
+            )
+            .into(),
             TypeError::Traits(values) => {
                 let (mut expected, mut found) = with_forced_trimmed_paths!((
                     tcx.def_path_str(values.expected),
