@@ -3041,12 +3041,36 @@ pub(crate) struct InvalidCVariadicType {
 }
 
 #[derive(Diagnostic)]
-#[diag(parse_invalid_tuple_unpacking)]
-pub(crate) struct InvalidTupleUnpacking {
+#[diag(parse_external_tuple_unpacking)]
+pub(crate) struct ExternalTupleUnpacking {
     #[primary_span]
     pub span: Span,
 }
 
+#[derive(Diagnostic)]
+#[diag(parse_argumentless_tuple_unpacking)]
+pub(crate) struct ArgumentlessTupleUnpacking {
+    #[primary_span]
+    pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[diag(parse_misspelled_c_variadic_type)]
+pub(crate) struct MisspelledCVariadicType {
+    #[primary_span]
+    pub span: Span,
+    #[suggestion(code = "...", applicability = "machine-applicable")]
+    pub suggestion: Span,
+}
+
+#[derive(Diagnostic)]
+#[diag(parse_misspelled_tuple_unpacking)]
+pub(crate) struct MisspelledTupleUnpacking {
+    #[primary_span]
+    pub span: Span,
+    #[suggestion(code = "..", applicability = "machine-applicable")]
+    pub suggestion: Span,
+}
 #[derive(Diagnostic)]
 #[diag(parse_invalid_dyn_keyword)]
 #[help]

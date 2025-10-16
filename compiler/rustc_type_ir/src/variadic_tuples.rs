@@ -7,7 +7,7 @@ use tracing::instrument;
 use crate::inherent::*;
 use crate::{self as ty, Interner};
 
-/// Shallowly flattens a variadic aliases to it's constituent types under some normalization scheme.
+/// Shallowly flattens a variadic aliases to its constituent types under some normalization scheme.
 ///
 /// `normalizer` is not called on any non-alias type.
 #[instrument(level = "trace", skip(cx, normalizer), ret)]

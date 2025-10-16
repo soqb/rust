@@ -1,0 +1,32 @@
+error: tuple unpacking `..T` must be followed by a type
+  --> $DIR/tuple-c-variadic-mutual-hints.rs:7:13
+   |
+LL | type Foo = (..);
+   |             ^^
+
+error: tuple unpacking `..T` must be spelled with two dots
+  --> $DIR/tuple-c-variadic-mutual-hints.rs:10:16
+   |
+LL | type Foo<T> = (...T);
+   |                ^^^ help: use two dots instead: `..`
+
+error: the C-variadic type `...` must be spelled with three dots
+  --> $DIR/tuple-c-variadic-mutual-hints.rs:13:25
+   |
+LL | extern "C" fn foo(args: ..);
+   |                         ^^ help: use three dots instead: `...`
+
+error: tuple unpacking `..T` may not be used outside a tuple
+  --> $DIR/tuple-c-variadic-mutual-hints.rs:16:12
+   |
+LL | type Foo = ..,;
+   |            ^^
+
+error: expected one of `;` or `where`, found `,`
+  --> $DIR/tuple-c-variadic-mutual-hints.rs:16:14
+   |
+LL | type Foo = ..,;
+   |              ^ expected one of `;` or `where`
+
+error: aborting due to 5 previous errors
+

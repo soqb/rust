@@ -711,7 +711,15 @@ parse_nested_adt = `{$kw_str}` definition cannot be nested inside `{$keyword}`
 
 parse_nested_c_variadic_type = C-variadic type `...` may not be nested inside another type
 
-parse_invalid_tuple_unpacking = Tuple unpacking `..T` may not be used outside a tuple
+parse_external_tuple_unpacking = tuple unpacking `..T` may not be used outside a tuple
+
+parse_argumentless_tuple_unpacking = tuple unpacking `..T` must be followed by a type
+
+parse_misspelled_c_variadic_type = the C-variadic type `...` must be spelled with three dots
+    .suggestion = use three dots instead
+
+parse_misspelled_tuple_unpacking = tuple unpacking `..T` must be spelled with two dots
+    .suggestion = use two dots instead
 
 parse_no_brace_unicode_escape = incorrect unicode escape sequence
     .label = {parse_no_brace_unicode_escape}

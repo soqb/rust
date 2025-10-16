@@ -13,11 +13,11 @@ use thin_vec::{ThinVec, thin_vec};
 
 use super::{Parser, PathStyle, SeqSep, TokenType, Trailing};
 use crate::errors::{
-    self, AttributeOnEmptyType, AttributeOnType, DynAfterMut, ExpectedFnPathFoundFnKeyword,
-    ExpectedMutOrConstInRawPointerType, FnPtrWithGenerics, FnPtrWithGenericsSugg,
-    HelpUseLatestEdition, InvalidCVariadicType, InvalidDynKeyword, InvalidTupleUnpacking,
-    LifetimeAfterMut, NeedPlusAfterTraitObjectLifetime, NestedCVariadicType,
-    ReturnTypesUseThinArrow,
+    self, ArgumentlessTupleUnpacking, AttributeOnEmptyType, AttributeOnType, DynAfterMut,
+    ExpectedFnPathFoundFnKeyword, ExpectedMutOrConstInRawPointerType, ExternalTupleUnpacking,
+    FnPtrWithGenerics, FnPtrWithGenericsSugg, HelpUseLatestEdition, InvalidCVariadicType,
+    InvalidDynKeyword, LifetimeAfterMut, MisspelledCVariadicType, MisspelledTupleUnpacking,
+    NeedPlusAfterTraitObjectLifetime, NestedCVariadicType, ReturnTypesUseThinArrow,
 };
 use crate::parser::item::FrontMatterParsingMode;
 use crate::parser::{FnContext, FnParseMode};
@@ -76,17 +76,18 @@ impl RecoverReturnSign {
     }
 }
 
-// Is `...` (`CVarArgs`) legal at this level of type parsing?
+/// How to treat `..` and `...` at this level of type parsing.
+///
+/// Note that only one of the above is legal in any one context,
+/// but we can provide better diagnostics by parsing both.
 #[derive(PartialEq)]
-enum AllowCVariadic {
-    Yes,
-    No,
-}
-
-// Is `..T` legal at this level of type parsing?
-pub(super) enum AllowTupleUnpacking {
-    Yes,
-    No,
+enum AllowedDotsType {
+    /// `...` (`CVarArgs`) is legal.
+    CVarArgs,
+    /// `..T` (`Unpacked`) is legal.
+    TupleUnpacking,
+    /// Neither of the above syntaxes are valid.
+    None,
 }
 
 /// Returns `true` if `IDENT t` can start a type -- `IDENT::a::b`, `IDENT<u8, u8>`,
@@ -126,8 +127,7 @@ impl<'a> Parser<'a> {
         ensure_sufficient_stack(|| {
             self.parse_ty_common(
                 AllowPlus::Yes,
-                AllowCVariadic::No,
-                AllowTupleUnpacking::No,
+                AllowedDotsType::None,
                 RecoverQPath::Yes,
                 RecoverReturnSign::Yes,
                 None,
@@ -142,8 +142,7 @@ impl<'a> Parser<'a> {
     ) -> PResult<'a, Box<Ty>> {
         self.parse_ty_common(
             AllowPlus::Yes,
-            AllowCVariadic::No,
-            AllowTupleUnpacking::No,
+            AllowedDotsType::None,
             RecoverQPath::Yes,
             RecoverReturnSign::Yes,
             Some(ty_params),
@@ -157,8 +156,7 @@ impl<'a> Parser<'a> {
     pub(super) fn parse_ty_for_param(&mut self) -> PResult<'a, Box<Ty>> {
         let ty = self.parse_ty_common(
             AllowPlus::Yes,
-            AllowCVariadic::Yes,
-            AllowTupleUnpacking::No,
+            AllowedDotsType::CVarArgs,
             RecoverQPath::Yes,
             RecoverReturnSign::Yes,
             None,
@@ -198,8 +196,7 @@ impl<'a> Parser<'a> {
     pub(super) fn parse_ty_no_plus(&mut self) -> PResult<'a, Box<Ty>> {
         self.parse_ty_common(
             AllowPlus::No,
-            AllowCVariadic::No,
-            AllowTupleUnpacking::No,
+            AllowedDotsType::None,
             RecoverQPath::Yes,
             RecoverReturnSign::Yes,
             None,
@@ -212,8 +209,7 @@ impl<'a> Parser<'a> {
     pub(super) fn parse_as_cast_ty(&mut self) -> PResult<'a, Box<Ty>> {
         self.parse_ty_common(
             AllowPlus::No,
-            AllowCVariadic::No,
-            AllowTupleUnpacking::No,
+            AllowedDotsType::None,
             RecoverQPath::Yes,
             RecoverReturnSign::Yes,
             None,
@@ -224,8 +220,7 @@ impl<'a> Parser<'a> {
     pub(super) fn parse_ty_no_question_mark_recover(&mut self) -> PResult<'a, Box<Ty>> {
         self.parse_ty_common(
             AllowPlus::Yes,
-            AllowCVariadic::No,
-            AllowTupleUnpacking::No,
+            AllowedDotsType::None,
             RecoverQPath::Yes,
             RecoverReturnSign::Yes,
             None,
@@ -238,8 +233,7 @@ impl<'a> Parser<'a> {
     pub(super) fn parse_ty_for_where_clause(&mut self) -> PResult<'a, Box<Ty>> {
         self.parse_ty_common(
             AllowPlus::Yes,
-            AllowCVariadic::No,
-            AllowTupleUnpacking::No,
+            AllowedDotsType::None,
             RecoverQPath::Yes,
             RecoverReturnSign::OnlyFatArrow,
             None,
@@ -259,8 +253,7 @@ impl<'a> Parser<'a> {
             // FIXME(Centril): Can we unconditionally `allow_plus`?
             let ty = self.parse_ty_common(
                 allow_plus,
-                AllowCVariadic::No,
-                AllowTupleUnpacking::No,
+                AllowedDotsType::None,
                 recover_qpath,
                 recover_return_sign,
                 None,
@@ -277,8 +270,7 @@ impl<'a> Parser<'a> {
             });
             let ty = self.parse_ty_common(
                 allow_plus,
-                AllowCVariadic::No,
-                AllowTupleUnpacking::No,
+                AllowedDotsType::None,
                 recover_qpath,
                 recover_return_sign,
                 None,
@@ -293,8 +285,7 @@ impl<'a> Parser<'a> {
     pub(super) fn parse_ty_for_tuple_argument(&mut self) -> PResult<'a, Box<Ty>> {
         self.parse_ty_common(
             AllowPlus::Yes,
-            AllowCVariadic::No,
-            AllowTupleUnpacking::Yes,
+            AllowedDotsType::TupleUnpacking,
             RecoverQPath::Yes,
             RecoverReturnSign::Yes,
             None,
@@ -305,8 +296,7 @@ impl<'a> Parser<'a> {
     fn parse_ty_common(
         &mut self,
         allow_plus: AllowPlus,
-        allow_c_variadic: AllowCVariadic,
-        allow_tuple_unpacking: AllowTupleUnpacking,
+        allowed_dots_ty: AllowedDotsType,
         recover_qpath: RecoverQPath,
         recover_return_sign: RecoverReturnSign,
         ty_generics: Option<&Generics>,
@@ -441,28 +431,63 @@ impl<'a> Parser<'a> {
         } else if self.can_begin_bound() {
             self.parse_bare_trait_object(lo, allow_plus)?
         } else if self.eat(exp!(DotDotDot)) {
-            match allow_c_variadic {
-                AllowCVariadic::Yes => TyKind::CVarArgs,
-                AllowCVariadic::No => {
+            match allowed_dots_ty {
+                AllowedDotsType::CVarArgs => TyKind::CVarArgs,
+                AllowedDotsType::TupleUnpacking
+                    if self.token != token::Comma && self.token != token::CloseParen =>
+                {
+                    // Probably something like `type Foo<T> = (...T)`
+                    // so parse as tuple unpacking and suggest removing the extraneous dot:
+                    // FIXME(soqb): It would be nice to only do this when the feature is actually enabled,
+                    // instead of gating when the suggestion possibly (though very rarely) incorrect.
+                    let ty = self.parse_ty()?;
+                    let span = lo.to(self.prev_token.span);
+                    self.psess.gated_spans.gate(sym::variadic_tuples, span);
+
+                    self.dcx().emit_err(MisspelledTupleUnpacking { span: lo, suggestion: lo });
+                    TyKind::Unpacked(ty)
+                }
+                _ => {
                     // FIXME(c_variadic): Should we just allow `...` syntactically
                     // anywhere in a type and use semantic restrictions instead?
                     // NOTE: This may regress certain MBE calls if done incorrectly.
                     //
-                    // We should similarly consider the below branch.
+                    // We should similarly consider the `DotDot` below branch.
                     let guar = self.dcx().emit_err(NestedCVariadicType { span: lo });
                     TyKind::Err(guar)
                 }
             }
         } else if self.eat(exp!(DotDot)) {
-            let ty = self.parse_ty()?;
-            let span = lo.to(self.prev_token.span);
-            self.psess.gated_spans.gate(sym::variadic_tuples, span);
+            if self.token == token::Comma || self.token == token::CloseParen {
+                let guar = match allowed_dots_ty {
+                    AllowedDotsType::CVarArgs => {
+                        // Probably something like `extern "C" fn foo(args: ..)`
+                        // so suggest adding the missing dot:
+                        self.dcx().emit_err(MisspelledCVariadicType { span: lo, suggestion: lo })
+                    }
+                    AllowedDotsType::TupleUnpacking => {
+                        // Probably something like `type Foo = (..)`
+                        // so suggest adding the missing type:
+                        self.dcx().emit_err(ArgumentlessTupleUnpacking { span: lo })
+                    }
+                    AllowedDotsType::None => {
+                        // Probably something like `type Foo = ..,`
+                        // which is, uhh, very incoherent, but we'll do our best:
+                        self.dcx().emit_err(ExternalTupleUnpacking { span: lo })
+                    }
+                };
+                TyKind::Err(guar)
+            } else {
+                let ty = self.parse_ty()?;
+                let span = lo.to(self.prev_token.span);
+                self.psess.gated_spans.gate(sym::variadic_tuples, span);
 
-            match allow_tuple_unpacking {
-                AllowTupleUnpacking::Yes => TyKind::Unpacked(ty),
-                AllowTupleUnpacking::No => {
-                    let guar = self.dcx().emit_err(InvalidTupleUnpacking { span });
-                    TyKind::Err(guar)
+                match allowed_dots_ty {
+                    AllowedDotsType::TupleUnpacking => TyKind::Unpacked(ty),
+                    _ => {
+                        let guar = self.dcx().emit_err(ExternalTupleUnpacking { span });
+                        TyKind::Err(guar)
+                    }
                 }
             }
         } else if self.check_keyword(exp!(Unsafe))
